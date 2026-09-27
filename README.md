@@ -49,6 +49,31 @@ Demo logins (after `seed:demo`):
 
 Use `npm run seed` in production. It only creates the master statuses and the first admin, taken from `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
 
+## Deploying (single service)
+
+In production one Node process serves both the API (`/api`) and the built React app, so there is one URL and no CORS setup.
+
+```bash
+npm run install:all
+npm run build                # builds frontend/dist
+npm run seed                 # once: runs migrations, creates master statuses and the first admin
+npm start                    # serves the web app and /api on $PORT
+```
+
+Migrations also run automatically each time the server starts. The app works with any PostgreSQL host, including Neon: set `DATABASE_URL` to the Neon connection string, keeping `sslmode=require`.
+
+Set these environment variables on the host (see `backend/.env.example`):
+
+| Variable | Needed for |
+|---|---|
+| `DATABASE_URL` | PostgreSQL / Neon |
+| `JWT_SECRET` | Login sessions. Use a long random string. |
+| `APP_URL` | Your public URL, used in email links and after Google sign-in |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | First admin account, created by `npm run seed` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Deadline and approval emails |
+| `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHARED_DRIVE_ID` | File manager (Google Drive). Add the service account's email to the Shared Drive as a Content manager. |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` | Google Calendar sync. The redirect URI is `https://<your-domain>/api/calendar/oauth/callback`. |
+
 ## How the key requirements are implemented
 
 - **Strict silos.** Every task and project query goes through one role-scoped query builder (`backend/src/services/tasks.js`).

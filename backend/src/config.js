@@ -12,6 +12,8 @@ export const config = {
   appUrl: env.APP_URL || 'http://localhost:5173',
   apiUrl: env.API_URL || `http://localhost:${env.PORT || 4000}`,
   enableJobs: env.ENABLE_JOBS !== 'false',
+  // Folder with the built frontend (defaults to ../frontend/dist when present).
+  webDist: env.WEB_DIST || null,
   smtp: {
     host: env.SMTP_HOST,
     port: Number(env.SMTP_PORT || 587),

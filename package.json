@@ -1,0 +1,12 @@
+{
+  "name": "v-agency",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix backend ci && npm --prefix frontend ci",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start",
+    "seed": "npm --prefix backend run seed",
+    "test": "npm --prefix backend test"
+  },
+  "engines": { "node": ">=20" }
+}

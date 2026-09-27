@@ -3,6 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { query } from './db/pool.js';
 import { authenticate, requireRole } from './middleware/auth.js';
@@ -20,10 +23,25 @@ import financeRoutes from './routes/finance.js';
 import fileRoutes from './routes/files.js';
 import calendarRoutes from './routes/calendar.js';
 
+// Hashed assets are immutable; everything else (logo, favicon) should revalidate.
+function noCacheHtml(res, filePath) {
+  if (!filePath.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'no-cache');
+}
+
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          // Uploads go straight from the browser to Google Drive's resumable upload URL.
+          'connect-src': ["'self'", 'https://www.googleapis.com'],
+          'img-src': ["'self'", 'data:', 'https:'],
+        },
+      },
+    }),
+  );
   app.use(cors({ origin: config.corsOrigin }));
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));
@@ -56,6 +74,16 @@ export function createApp() {
   api.use(fileRoutes);
 
   app.use('/api', api);
+
+  // In production the built React app is served by this same process (one URL, no CORS).
+  const webDist = config.webDist ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist');
+  if (fs.existsSync(path.join(webDist, 'index.html'))) {
+    app.use(express.static(webDist, { index: false, maxAge: '1y', immutable: true, setHeaders: noCacheHtml }));
+    app.get(/^(?!\/api\/).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(path.join(webDist, 'index.html'));
+    });
+  }
 
   app.use((_req, _res, next) => next(new HttpError(404, 'NOT_FOUND', 'Route not found')));
   // eslint-disable-next-line no-unused-vars
