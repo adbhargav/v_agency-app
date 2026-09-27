@@ -47,6 +47,7 @@ describe('visibility silos', () => {
       assert.equal(t.timeSpentSeconds, undefined);
       assert.equal(t.activeTimer, undefined);
     }
+    assert.equal(byTitle(body.tasks, 'Design Meta Ad Carousels').approvalState, 'none'); // internal review is hidden
     const { body: dash } = await u.client.get('/dashboard/client');
     assert.equal(dash.projects[0].progress > 0, true);
     assert.equal((await u.client.get('/finance/summary')).status, 403);

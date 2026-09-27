@@ -10,7 +10,10 @@ const TASK_SELECT = `
          ms.name AS master_status_name, ms.is_done AS master_is_done,
          a.name AS assignee_name, cb.name AS created_by_name,
          COALESCE(te.seconds, 0)::bigint AS time_spent_seconds,
-         my.started_at AS my_timer_started_at
+         my.started_at AS my_timer_started_at,
+         (SELECT rc.is_internal FROM task_comments rc
+           WHERE rc.task_id = t.id AND rc.kind = 'revision_request'
+           ORDER BY rc.created_at DESC LIMIT 1) AS last_revision_internal
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     JOIN clients c ON c.id = p.client_id
@@ -36,6 +39,8 @@ export function visibilityClause(viewer, params) {
   return `p.client_id = $${params.length}`;
 }
 
+const CLIENT_VISIBLE_STATES = new Set(['client_review', 'approved']);
+
 export function serializeTask(row, viewer) {
   const isOverdue = !!row.due_date && !row.master_is_done && new Date(row.due_date) < new Date();
   const base = {
@@ -55,7 +60,12 @@ export function serializeTask(row, viewer) {
     updatedAt: row.updated_at,
   };
   // Client-safe shape: no people, no time tracking, no internal workflow ids.
-  if (viewer.role === 'client') return base;
+  if (viewer.role === 'client') {
+    // Internal review and manager-requested revisions are agency business; clients only see their own step.
+    const ownRevision = base.approvalState === 'revision_requested' && row.last_revision_internal === false;
+    if (!CLIENT_VISIBLE_STATES.has(base.approvalState) && !ownRevision) base.approvalState = 'none';
+    return base;
+  }
   return {
     ...base,
     clientId: row.client_id,
