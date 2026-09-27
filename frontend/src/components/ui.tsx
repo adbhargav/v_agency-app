@@ -76,7 +76,7 @@ export function ProgressBar({ value, className, size = 'md' }: { value: number; 
   return (
     <div className={cn('w-full overflow-hidden rounded-full bg-slate-100', size === 'sm' ? 'h-1.5' : 'h-2.5', className)} role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}>
       <div
-        className={cn('h-full rounded-full transition-[width] duration-500', v >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-brand-500 to-violet-500')}
+        className={cn('h-full rounded-full transition-[width] duration-500', v >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-brand-400 to-brand-600')}
         style={{ width: `${v}%` }}
       />
     </div>
@@ -226,7 +226,7 @@ export function Tabs<T extends string>({
 
 export function StatCard({ label, value, icon, tone = 'brand', hint }: { label: string; value: ReactNode; icon: ReactNode; tone?: 'brand' | 'amber' | 'emerald' | 'rose'; hint?: string }) {
   const tones = {
-    brand: 'from-brand-500 to-violet-500',
+    brand: 'from-brand-400 to-brand-700',
     amber: 'from-amber-400 to-orange-500',
     emerald: 'from-emerald-400 to-teal-500',
     rose: 'from-rose-400 to-red-500',

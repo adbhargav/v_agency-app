@@ -26,6 +26,7 @@ import { ActiveTimerIndicator, NotificationBell } from './HeaderWidgets';
 import { TaskDrawer } from './TaskDetail';
 import { Avatar, Skeleton } from './ui';
 import type { User } from '../types';
+import { LogoMark, Wordmark } from './Logo';
 
 interface NavItem {
   to: string;
@@ -70,10 +71,10 @@ export function navFor(user: User): NavItem[] {
 function Brand() {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 text-lg font-bold text-white shadow-lift">V</span>
+      <LogoMark className="size-10" />
       <div className="leading-tight">
-        <p className="text-sm font-semibold text-slate-900">V Agency</p>
-        <p className="text-[11px] text-slate-500">Operations</p>
+        <Wordmark className="block text-[13px] text-slate-900" />
+        <p className="mt-0.5 text-[11px] text-slate-500">Operations</p>
       </div>
     </div>
   );

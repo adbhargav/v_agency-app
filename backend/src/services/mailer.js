@@ -19,11 +19,14 @@ function getTransport() {
 const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
 function layout({ heading, body, ctaLabel, ctaUrl, tone = 'normal' }) {
-  const accent = tone === 'alert' ? '#dc2626' : '#4f46e5';
+  const accent = tone === 'alert' ? '#b8211f' : '#df2f25';
   return `<!doctype html><html><body style="margin:0;background:#f4f5fb;font-family:Segoe UI,Arial,sans-serif;color:#1e1b4b">
   <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
     <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:14px;overflow:hidden">
-      <tr><td style="background:${accent};padding:20px 28px;color:#fff;font-size:18px;font-weight:600">V Agency</td></tr>
+      <tr><td style="background:#0b0d1a;padding:18px 28px;border-bottom:3px solid ${accent}">
+        <img src="${escape(config.appUrl)}/logo-mark.png" width="36" height="36" alt="" style="vertical-align:middle;border:0">
+        <span style="vertical-align:middle;margin-left:10px;color:#fff;font-size:15px;font-weight:700;letter-spacing:5px">V AGENCY</span>
+      </td></tr>
       <tr><td style="padding:28px">
         <h1 style="margin:0 0 12px;font-size:20px">${escape(heading)}</h1>
         <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#374151">${escape(body)}</p>

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
+import { LogoMark } from './components/Logo';
 import { homeFor } from './lib/roles';
 import type { Role } from './types';
 
@@ -20,7 +21,7 @@ function FullScreenLoader() {
   return (
     <div className="flex min-h-dvh items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-slate-400">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 text-xl font-bold text-white shadow-lift">V</span>
+        <LogoMark className="size-16 animate-pulse" />
         <Spinner />
       </div>
     </div>

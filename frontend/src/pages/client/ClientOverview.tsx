@@ -19,7 +19,7 @@ export default function ClientOverview() {
       {pending > 0 && (
         <Link
           to="/client/actions"
-          className="animate-slide-up mb-6 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brand-600 to-violet-600 p-4 text-white shadow-lift transition hover:brightness-110 sm:p-5"
+          className="animate-slide-up mb-6 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brand-700 to-brand-500 p-4 text-white shadow-lift transition hover:brightness-110 sm:p-5"
         >
           <span className="flex size-11 items-center justify-center rounded-xl bg-white/15">
             <MessageSquareWarning className="size-5" />

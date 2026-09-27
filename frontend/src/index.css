@@ -2,16 +2,19 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  /* Sampled from the V Agency logo: amber -> orange -> red -> maroon. */
+  --color-brand-50: #fff4ee;
+  --color-brand-100: #ffe4d6;
+  --color-brand-200: #ffc7ab;
+  --color-brand-300: #ff9f76;
+  --color-brand-400: #fb6f42;
+  --color-brand-500: #f2491f;
+  --color-brand-600: #df2f25;
+  --color-brand-700: #b8211f;
+  --color-brand-800: #921d1f;
+  --color-brand-900: #6f1a1b;
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
-  --shadow-lift: 0 10px 30px -12px rgb(79 70 229 / 0.35);
+  --shadow-lift: 0 10px 30px -12px rgb(223 47 37 / 0.35);
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-up: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-in-right: slide-in-right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -61,7 +64,7 @@
   @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-sm hover:shadow-lift hover:brightness-110;
+  @apply btn bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-sm hover:shadow-lift hover:brightness-110;
 }
 @utility btn-secondary {
   @apply btn border border-slate-200 bg-white text-slate-700 shadow-xs hover:bg-slate-50;

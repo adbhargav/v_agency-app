@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { errorMessage } from '../../api/client';
 import { Spinner } from '../../components/ui';
 import { homeFor } from '../../lib/roles';
+import { LogoMark, Wordmark } from '../../components/Logo';
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -37,11 +38,12 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
       <div className="pointer-events-none absolute -left-40 -top-40 size-[32rem] rounded-full bg-brand-600/40 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -right-40 size-[32rem] rounded-full bg-violet-600/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 size-[32rem] rounded-full bg-amber-500/20 blur-3xl" />
       <div className="animate-slide-up relative w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 text-2xl font-bold text-white shadow-lift">V</span>
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-white">Welcome to V Agency</h1>
+          <LogoMark className="size-24 drop-shadow-[0_12px_30px_rgba(223,47,37,0.45)]" />
+          <Wordmark className="mt-4 text-lg text-white" />
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight text-white">Welcome back</h1>
           <p className="mt-1 text-sm text-slate-400">Operations & project management</p>
         </div>
         <form onSubmit={submit} className="space-y-4 rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl backdrop-blur sm:p-8">

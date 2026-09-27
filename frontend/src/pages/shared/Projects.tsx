@@ -25,7 +25,7 @@ export function ProjectCard({ project, to }: { project: Project; to: string }) {
   return (
     <Link to={to} className="card group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-50 to-violet-100 text-brand-600">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-50 to-amber-100 text-brand-600">
           <FolderKanban className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -234,7 +234,7 @@ export function ProjectDetailPage() {
         <ArrowLeft className="size-4" /> {isClient ? 'Overview' : 'All projects'}
       </Link>
       <div className="card mb-6 overflow-hidden">
-        <div className="bg-gradient-to-br from-brand-600 via-brand-500 to-violet-600 p-5 text-white sm:p-6">
+        <div className="bg-gradient-to-br from-brand-800 via-brand-600 to-brand-400 p-5 text-white sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               {!isClient && <p className="text-sm text-white/70">{project.clientName}</p>}
