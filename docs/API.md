@@ -39,7 +39,7 @@ Task (admin/employee) {
   id, projectId, projectName, clientId, clientName, title, description, dueDate, priority,
   masterStatusId, masterStatusName, customStatusId, percentDone, approvalState,
   assignee: { id, name } | null, createdBy: { id, name },
-  timeSpentSeconds, activeTimer: { startedAt } | null,   // activeTimer only for the requesting user's running timer
+  timeSpentSeconds /* excludes the requester's own running segment */, activeTimer: { startedAt } | null,   // requester's running timer only
   isOverdue, completedAt, createdAt, updatedAt }
 Task (client) { id, projectId, projectName, title, description, dueDate, priority, masterStatusName, percentDone,
   approvalState, isOverdue, completedAt, createdAt, updatedAt }

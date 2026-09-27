@@ -19,7 +19,9 @@ const TASK_SELECT = `
     LEFT JOIN users cb ON cb.id = t.created_by
     LEFT JOIN LATERAL (
       SELECT SUM(EXTRACT(EPOCH FROM (COALESCE(e.ended_at, now()) - e.started_at)))::bigint AS seconds
-        FROM time_entries e WHERE e.task_id = t.id
+        FROM time_entries e
+       -- The viewer's own running segment is excluded: it is returned as activeTimer and ticked live by the UI.
+       WHERE e.task_id = t.id AND NOT (e.ended_at IS NULL AND e.user_id = $1)
     ) te ON true
     LEFT JOIN time_entries my ON my.task_id = t.id AND my.user_id = $1 AND my.ended_at IS NULL
 `;
