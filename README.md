@@ -60,6 +60,8 @@ npm run seed                 # once: runs migrations, creates master statuses an
 npm start                    # serves the web app and /api on $PORT
 ```
 
+**Render + Vercel:** `render.yaml` is a Render Blueprint for the API (Render → New → Blueprint), and `frontend/vercel.json` deploys the web app on Vercel with `/api` proxied to Render. The Blueprint generates `JWT_SECRET` and asks for the rest in the dashboard. In production the first admin is only created when `ADMIN_PASSWORD` (8+ characters) is set.
+
 Migrations also run automatically each time the server starts. The app works with any PostgreSQL host, including Neon: set `DATABASE_URL` to the Neon connection string, keeping `sslmode=require`.
 
 Set these environment variables on the host (see `backend/.env.example`):

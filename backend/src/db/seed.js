@@ -82,12 +82,18 @@ export async function seed({ demo = false } = {}) {
     }
   }
   const email = process.env.ADMIN_EMAIL || 'admin@vagency.com';
-  const password = process.env.ADMIN_PASSWORD || 'admin12345';
-  await query(
-    `INSERT INTO users (name, email, password_hash, role) SELECT 'Agency Admin', $1, $2, 'admin'
-      WHERE NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($1))`,
-    [email, await bcrypt.hash(password, 10)],
-  );
+  const password = process.env.ADMIN_PASSWORD;
+  const { rows: admins } = await query(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`);
+  if (!admins.length) {
+    // Never create a live admin with the well-known development password.
+    if (process.env.NODE_ENV === 'production' && (!password || password.length < 8)) {
+      throw new Error('Set ADMIN_PASSWORD (8+ characters) to create the first admin account');
+    }
+    await query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Agency Admin', $1, $2, 'admin')`, [
+      email,
+      await bcrypt.hash(password || 'admin12345', 10),
+    ]);
+  }
   await seedServices();
   if (demo) await seedDemo();
 }
