@@ -19,7 +19,11 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/me', authenticate, async (req, res) => {
-  const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  const { rows } = await query(
+    `SELECT u.*, COALESCE((SELECT array_agg(service_type_id::text) FROM user_service_types s WHERE s.user_id = u.id), '{}') AS service_type_ids
+       FROM users u WHERE u.id = $1`,
+    [req.user.id],
+  );
   res.json({ user: serializeUser(rows[0]) });
 });
 

@@ -1,3 +1,5 @@
+import { signFileToken } from '../middleware/auth.js';
+
 export const serializeUser = (u) => ({
   id: u.id,
   name: u.name,
@@ -7,6 +9,7 @@ export const serializeUser = (u) => ({
   clientId: u.client_id,
   isActive: u.is_active,
   googleCalendarConnected: !!u.google_refresh_token,
+  serviceTypeIds: u.service_type_ids ?? [],
   createdAt: u.created_at,
 });
 
@@ -18,6 +21,7 @@ export const serializeClient = (c) => ({
   phone: c.phone,
   createdAt: c.created_at,
   projectCount: Number(c.project_count ?? 0),
+  serviceTypeIds: c.service_type_ids ?? [],
 });
 
 export const serializeMasterStatus = (s) => ({ id: s.id, name: s.name, position: s.position, color: s.color, isDone: s.is_done });
@@ -36,6 +40,8 @@ export function serializeFile(f, viewer) {
     size: f.size === null ? null : Number(f.size),
     isFinal: f.is_final,
     webViewLink: f.web_view_link,
+    // Opens through the app (no Google account needed); scoped to this file and viewer.
+    contentUrl: viewer ? `/api/files/${f.id}/content?t=${signFileToken(viewer.id, f.id)}` : null,
     createdAt: f.created_at,
   };
   if (viewer?.role !== 'client' && f.uploaded_by) out.uploadedBy = { id: f.uploaded_by, name: f.uploaded_by_name };

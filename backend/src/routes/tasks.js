@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { csv, parse } from '../lib/validate.js';
 import { serializeFile } from '../lib/serialize.js';
-import { firstStatusId, getTask, listTasks, loadTaskRow } from '../services/tasks.js';
+import { firstStatusId, getTask, listTasks, loadTaskRow, moveToMaster } from '../services/tasks.js';
 import { adminIds, clientUserIds, notify } from '../services/notify.js';
 import { syncTaskEvent } from '../services/calendar.js';
 
@@ -26,6 +26,8 @@ const listQuery = z.object({
   clientIds: z.array(uuid).optional(),
   projectIds: z.array(uuid).optional(),
   masterStatusIds: z.array(uuid).optional(),
+  serviceTypeIds: z.array(uuid).optional(),
+  requirementIds: z.array(uuid).optional(),
   priorities: z.array(priority).optional(),
   approvalStates: z.array(z.enum(['none', 'internal_review', 'client_review', 'approved', 'revision_requested'])).optional(),
   due: z.enum(['overdue', 'today', 'week']).optional(),
@@ -40,6 +42,8 @@ router.get('/', async (req, res) => {
     clientIds: csv(q.clientIds),
     projectIds: csv(q.projectIds),
     masterStatusIds: csv(q.masterStatusIds),
+    serviceTypeIds: csv(q.serviceTypeIds),
+    requirementIds: csv(q.requirementIds),
     priorities: csv(q.priorities),
     approvalStates: csv(q.approvalStates),
     due: q.due || undefined,
@@ -73,20 +77,9 @@ async function assertMasterStatus(id, db = { query }) {
   if (!rowCount) throw badRequest('masterStatusId does not exist');
 }
 
-/**
- * Moves a task to a master status. The assignee's column follows: we pick their first custom
- * column mapped to that master status so the task stays visible on their personal board.
- */
-async function moveToMaster(db, task, masterStatusId) {
-  if (!masterStatusId) return;
-  await db.query(
-    `UPDATE tasks SET master_status_id = $2,
-            custom_status_id = (SELECT id FROM custom_statuses
-                                 WHERE user_id = tasks.assignee_id AND master_status_id = $2
-                                 ORDER BY position LIMIT 1)
-      WHERE id = $1`,
-    [task.id, masterStatusId],
-  );
+async function assertServiceType(id) {
+  const { rowCount } = await query('SELECT 1 FROM service_types WHERE id = $1', [id]);
+  if (!rowCount) throw badRequest('serviceTypeId does not exist');
 }
 
 async function statusByName(db, name) {
@@ -130,6 +123,7 @@ const createSchema = z.object({
   assigneeId: uuid.nullish(),
   masterStatusId: uuid.optional(),
   customStatusId: uuid.optional(),
+  serviceTypeId: uuid.nullish(),
 });
 
 router.post('/', requireRole('admin', 'employee'), async (req, res) => {
@@ -157,11 +151,12 @@ router.post('/', requireRole('admin', 'employee'), async (req, res) => {
   }
   if (masterStatusId) await assertMasterStatus(masterStatusId);
   masterStatusId ??= await firstStatusId();
+  if (b.serviceTypeId) await assertServiceType(b.serviceTypeId);
 
   const { rows } = await query(
-    `INSERT INTO tasks (project_id, title, description, due_date, priority, master_status_id, custom_status_id, assignee_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [b.projectId, b.title, b.description ?? null, b.dueDate ?? null, b.priority, masterStatusId, customStatusId, assigneeId, me.id],
+    `INSERT INTO tasks (project_id, title, description, due_date, priority, master_status_id, custom_status_id, assignee_id, created_by, service_type_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+    [b.projectId, b.title, b.description ?? null, b.dueDate ?? null, b.priority, masterStatusId, customStatusId, assigneeId, me.id, b.serviceTypeId ?? null],
   );
   const id = rows[0].id;
   if (customStatusId === null && assigneeId) await moveToMaster({ query }, { id }, masterStatusId);
@@ -189,6 +184,7 @@ const updateSchema = z.object({
   percentDone: z.number().int().min(0).max(100).optional(),
   masterStatusId: uuid.optional(),
   customStatusId: uuid.optional(),
+  serviceTypeId: uuid.nullish(),
 });
 
 router.patch('/:id', requireRole('admin', 'employee'), async (req, res) => {
@@ -214,6 +210,11 @@ router.patch('/:id', requireRole('admin', 'employee'), async (req, res) => {
   }
   if (b.priority) set('priority', b.priority);
   if (b.percentDone !== undefined) set('percent_done', b.percentDone);
+  if ('serviceTypeId' in b) {
+    if (me.role !== 'admin') throw forbidden('Only managers can change the service type');
+    if (b.serviceTypeId) await assertServiceType(b.serviceTypeId);
+    set('service_type_id', b.serviceTypeId ?? null);
+  }
   if (reassigned) {
     set('assignee_id', b.assigneeId ?? null);
     sets.push('custom_status_id = NULL');

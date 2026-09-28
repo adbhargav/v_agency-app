@@ -9,6 +9,7 @@ const TASK_SELECT = `
          p.name AS project_name, p.client_id, c.name AS client_name,
          ms.name AS master_status_name, ms.is_done AS master_is_done,
          a.name AS assignee_name, cb.name AS created_by_name,
+         st.name AS service_type_name, st.color AS service_type_color,
          COALESCE(te.seconds, 0)::bigint AS time_spent_seconds,
          my.started_at AS my_timer_started_at,
          (SELECT rc.is_internal FROM task_comments rc
@@ -20,6 +21,7 @@ const TASK_SELECT = `
     JOIN master_statuses ms ON ms.id = t.master_status_id
     LEFT JOIN users a ON a.id = t.assignee_id
     LEFT JOIN users cb ON cb.id = t.created_by
+    LEFT JOIN service_types st ON st.id = t.service_type_id
     LEFT JOIN LATERAL (
       SELECT SUM(EXTRACT(EPOCH FROM (COALESCE(e.ended_at, now()) - e.started_at)))::bigint AS seconds
         FROM time_entries e
@@ -54,6 +56,8 @@ export function serializeTask(row, viewer) {
     masterStatusName: row.master_status_name,
     percentDone: row.percent_done,
     approvalState: row.approval_state,
+    serviceType: row.service_type_id ? { id: row.service_type_id, name: row.service_type_name, color: row.service_type_color } : null,
+    requirementId: row.requirement_id ?? null,
     isOverdue,
     completedAt: row.completed_at,
     createdAt: row.created_at,
@@ -96,6 +100,8 @@ export async function listTasks(viewer, filters = {}, db = { query }) {
   if (filters.clientIds) add('p.client_id = ANY(?::uuid[])', filters.clientIds);
   if (filters.projectIds) add('t.project_id = ANY(?::uuid[])', filters.projectIds);
   if (filters.masterStatusIds) add('t.master_status_id = ANY(?::uuid[])', filters.masterStatusIds);
+  if (filters.serviceTypeIds) add('t.service_type_id = ANY(?::uuid[])', filters.serviceTypeIds);
+  if (filters.requirementIds) add('t.requirement_id = ANY(?::uuid[])', filters.requirementIds);
   if (filters.priorities) add('t.priority::text = ANY(?::text[])', filters.priorities);
   if (filters.approvalStates) add('t.approval_state::text = ANY(?::text[])', filters.approvalStates);
   if (filters.search) add('(t.title ILIKE ? OR t.description ILIKE ?)', `%${filters.search}%`);
@@ -138,3 +144,20 @@ export async function firstStatusId(db = { query }) {
   const { rows } = await db.query('SELECT id FROM master_statuses ORDER BY position LIMIT 1');
   return rows[0]?.id ?? null;
 }
+
+/**
+ * Moves a task to a master status. The assignee's column follows: we pick their first custom
+ * column mapped to that master status so the task stays visible on their personal board.
+ */
+export async function moveToMaster(db, task, masterStatusId) {
+  if (!masterStatusId) return;
+  await db.query(
+    `UPDATE tasks SET master_status_id = $2,
+            custom_status_id = (SELECT id FROM custom_statuses
+                                 WHERE user_id = tasks.assignee_id AND master_status_id = $2
+                                 ORDER BY position LIMIT 1)
+      WHERE id = $1`,
+    [task.id, masterStatusId],
+  );
+}
+

@@ -22,6 +22,8 @@ import notificationRoutes from './routes/notifications.js';
 import financeRoutes from './routes/finance.js';
 import fileRoutes from './routes/files.js';
 import calendarRoutes from './routes/calendar.js';
+import serviceTypeRoutes from './routes/serviceTypes.js';
+import requirementRoutes from './routes/requirements.js';
 
 // Hashed assets are immutable; everything else (logo, favicon) should revalidate.
 function noCacheHtml(res, filePath) {
@@ -62,6 +64,8 @@ export function createApp() {
   api.use('/eod', eodRoutes);
   api.use('/notifications', notificationRoutes);
   api.use('/finance', financeRoutes);
+  api.use('/service-types', serviceTypeRoutes);
+  api.use('/requirements', requirementRoutes);
   api.get('/timer/active', requireRole('admin', 'employee'), async (req, res) => {
     const { rows } = await query(
       `SELECT e.task_id, e.started_at, t.title FROM time_entries e JOIN tasks t ON t.id = e.task_id

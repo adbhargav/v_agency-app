@@ -142,3 +142,45 @@ Assigned tasks with a due date create/update events automatically; a background 
 - `POST /finance/wallet/:userId/credit` `{ amount, description, taskId? }` (project-based employees only)
 - `POST /finance/wallet/transactions/:id/settle`
 - `GET /finance/salary/:userId` → `{ records }`; `POST /finance/salary/:userId` `{ periodMonth: 'YYYY-MM', amount }`; `POST /finance/salary/records/:id/status` `{ status: 'sent'|'settled' }`
+
+## Services, custom fields & client requirements
+
+```ts
+ServiceField { id, label, type: 'text'|'textarea'|'number'|'date'|'select'|'multiselect'|'checkbox'|'url'|'file',
+               required, options: string[] /* select & multiselect */, helpText, position }
+ServiceType  { id, name, description, color, isActive, position, fields: ServiceField[], memberCount?, requirementCount?, createdAt }
+Requirement  { id, title, clientId, clientName, projectId, projectName, serviceType: { id, name, color },
+               priority, desiredDate /* YYYY-MM-DD */, status: 'new'|'accepted'|'declined',
+               displayStatus: 'new'|'in_progress'|'completed'|'declined', declineReason,
+               answers: [{ fieldId, label, type, value, files?: File[] /* file fields */ }], files: File[],
+               taskCount, doneCount, progress, submittedBy?: { id, name } /* not for clients */, createdAt, reviewedAt,
+               tasks?: Task[] /* detail only, role-scoped */ }
+```
+
+`User` and `Client` also have `serviceTypeIds: string[]`. `Task` also has `serviceType: {id,name,color} | null` and `requirementId`.
+`File` also has `contentUrl`. This link opens or streams the file through the app, so no Google account is needed. It works in `<img>`/`<video>` src and expires after 12h. Append `&download=1` to download the file.
+
+- `GET /service-types` → `{ serviceTypes }`. A client gets only the services linked to their account, or every active service if none are linked. Admins can pass `?includeInactive=true`.
+- `GET /service-types/:id` → `{ serviceType }`
+- `POST /service-types` (admin) `{ name, description?, color?, fields?: FieldInput[] }` → `{ serviceType }`
+- `PATCH /service-types/:id` (admin) `{ name?, description?, color?, isActive?, position? }`
+- `PUT /service-types/:id/fields` (admin) `{ fields: FieldInput[] }` replaces the whole form in the given order. Pass a field's `id` to keep it; fields you leave out are deactivated. `FieldInput = { id?, label, type, required?, options?, helpText? }`
+- `DELETE /service-types/:id` (admin). Returns 409 if the service already has requirements; deactivate it instead.
+- `GET /users?role=employee&serviceTypeId=` filters employees by team. `POST/PATCH /users` accept `serviceTypeIds`.
+- `POST/PATCH /clients` accept `serviceTypeIds`, the services the client buys.
+- `GET /tasks?serviceTypeIds=` filters by team. `POST/PATCH /tasks` accept `serviceTypeId` (admin).
+- `GET /requirements?statuses=&serviceTypeIds=&clientIds=&projectIds=` → `{ requirements }`
+  - admin: all
+  - client: their own
+  - employee: only requirements with a task assigned to them
+- `GET /requirements/:id` → `{ requirement }` (includes `tasks`)
+- `POST /requirements` (client; admin may pass `clientId`) `{ projectId, serviceTypeId, title, priority?, desiredDate?, answers: { [fieldId]: value } }`
+  - Value types:
+    - text/textarea/url/date/select: string
+    - number: number
+    - multiselect: string[]
+    - checkbox: boolean
+    - file: fileId[]
+  - To fill a file field, upload each file first with `POST /files/upload-session { projectId, name, mimeType, size, purpose: 'requirement' }`, PUT the bytes to the returned upload URL, then call `POST /files/complete`. Put the resulting file ids in the answer.
+- `POST /requirements/:id/tasks` (admin) `{ title, description?, assigneeId?, dueDate?, priority? }` → `{ task }`. Creates a task linked to the requirement and its service, and marks the requirement accepted. Call it more than once to split the work across teams.
+- `POST /requirements/:id/decline` (admin) `{ reason }` sends the reason back to the client.

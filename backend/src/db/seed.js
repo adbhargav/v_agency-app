@@ -9,6 +9,69 @@ const MASTER = [
   { name: 'Done', color: '#10b981', isDone: true },
 ];
 
+// Starter services and requirement forms; the admin can edit, extend or deactivate them in the app.
+const SERVICES = [
+  {
+    name: 'Video Editing', color: '#df2f25', description: 'Reels, ads, property tours and long-form edits',
+    fields: [
+      { label: 'Video type', type: 'select', required: true, options: ['Reel / Short', 'Ad', 'Property tour', 'YouTube long-form', 'Other'] },
+      { label: 'Target length', type: 'select', required: false, options: ['Under 30s', '30–60s', '1–3 min', '3–10 min', '10 min+'] },
+      { label: 'Platforms', type: 'multiselect', required: false, options: ['Instagram', 'YouTube', 'Facebook', 'TikTok', 'LinkedIn', 'Website'] },
+      { label: 'Brief', type: 'textarea', required: true, helpText: 'Story, style, music, captions, calls to action…' },
+      { label: 'Raw footage', type: 'file', required: false, helpText: 'Upload the clips to edit' },
+      { label: 'Reference link', type: 'url', required: false },
+    ],
+  },
+  {
+    name: 'Graphic Design', color: '#f59e0b', description: 'Social creatives, ad carousels, brand assets',
+    fields: [
+      { label: 'Deliverable', type: 'select', required: true, options: ['Social post', 'Ad carousel', 'Story', 'Logo / branding', 'Print', 'Other'] },
+      { label: 'Sizes needed', type: 'multiselect', required: false, options: ['1:1', '4:5', '9:16', '16:9', 'A4'] },
+      { label: 'Copy / text to include', type: 'textarea', required: false },
+      { label: 'Brief', type: 'textarea', required: true },
+      { label: 'Reference images', type: 'file', required: false },
+    ],
+  },
+  {
+    name: 'Development', color: '#6366f1', description: 'Websites, landing pages and app changes',
+    fields: [
+      { label: 'Request type', type: 'select', required: true, options: ['New feature', 'Bug fix', 'New page', 'Content update', 'Other'] },
+      { label: 'Page or app URL', type: 'url', required: false },
+      { label: 'What should be built or changed?', type: 'textarea', required: true },
+      { label: 'Steps to reproduce (for bugs)', type: 'textarea', required: false },
+      { label: 'Screenshots / recordings', type: 'file', required: false },
+    ],
+  },
+  {
+    name: 'Marketing', color: '#10b981', description: 'Campaigns, ads management and social media',
+    fields: [
+      { label: 'Campaign goal', type: 'select', required: true, options: ['Leads', 'Sales', 'Awareness', 'Engagement', 'Traffic'] },
+      { label: 'Channels', type: 'multiselect', required: true, options: ['Meta Ads', 'Google Ads', 'Instagram organic', 'Email', 'LinkedIn'] },
+      { label: 'Monthly budget', type: 'number', required: false },
+      { label: 'Launch date', type: 'date', required: false },
+      { label: 'Target audience', type: 'textarea', required: true },
+      { label: 'Brand assets', type: 'file', required: false },
+    ],
+  },
+];
+
+async function seedServices() {
+  const { rows } = await query('SELECT COUNT(*)::int AS n FROM service_types');
+  if (rows[0].n) return;
+  for (const [i, st] of SERVICES.entries()) {
+    const { rows: created } = await query(
+      'INSERT INTO service_types (name, description, color, position) VALUES ($1, $2, $3, $4) RETURNING id',
+      [st.name, st.description, st.color, i],
+    );
+    for (const [pos, f] of st.fields.entries()) {
+      await query(
+        'INSERT INTO service_fields (service_type_id, label, type, required, options, help_text, position) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [created[0].id, f.label, f.type, f.required, JSON.stringify(f.options ?? []), f.helpText ?? null, pos],
+      );
+    }
+  }
+}
+
 /** Idempotent: master statuses + first admin. Pass --demo for sample clients, staff, projects and tasks. */
 export async function seed({ demo = false } = {}) {
   await migrate();
@@ -25,6 +88,7 @@ export async function seed({ demo = false } = {}) {
       WHERE NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($1))`,
     [email, await bcrypt.hash(password, 10)],
   );
+  await seedServices();
   if (demo) await seedDemo();
 }
 
@@ -63,6 +127,15 @@ async function seedDemo() {
   await task('Brand Color Grading LUT', editor, 'Done', 'low', `now() - interval '3 days'`, 100, 'approved');
   await query(`INSERT INTO wallet_transactions (employee_id, amount, description, created_by)
                SELECT $1, 250, 'Property tour edit — milestone 1', id FROM users WHERE role = 'admin' LIMIT 1`, [editor]);
+  const service = Object.fromEntries((await query('SELECT id, name FROM service_types')).rows.map((r) => [r.name, r.id]));
+  await query('INSERT INTO user_service_types (user_id, service_type_id) VALUES ($1, $2), ($3, $4)', [
+    editor, service['Video Editing'], designer, service['Graphic Design'],
+  ]);
+  await query('INSERT INTO client_service_types (client_id, service_type_id) VALUES ($1, $2), ($1, $3), ($1, $4)', [
+    client, service['Video Editing'], service['Graphic Design'], service.Marketing,
+  ]);
+  await query(`UPDATE tasks SET service_type_id = $1 WHERE assignee_id = $2`, [service['Video Editing'], editor]);
+  await query(`UPDATE tasks SET service_type_id = $1 WHERE assignee_id = $2`, [service['Graphic Design'], designer]);
   await query(`INSERT INTO salary_records (employee_id, period_month, amount, status) VALUES ($1, date_trunc('month', current_date), 1200, 'sent')`, [designer]);
 }
 

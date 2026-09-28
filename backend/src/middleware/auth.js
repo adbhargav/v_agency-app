@@ -3,19 +3,34 @@ import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { forbidden, unauthorized } from '../lib/errors.js';
 
+/** Short-lived token that only lets this user open one file's content URL. */
+export function signFileToken(userId, fileId) {
+  return jwt.sign({ sub: userId, purpose: 'file', fid: fileId }, config.jwtSecret, { expiresIn: '12h' });
+}
+
 export function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 }
 
 export async function authenticate(req, _res, next) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  let token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  let fileScope = null;
+  // <img>/<video> tags cannot send headers, so file content URLs carry a short-lived token scoped to that one file.
+  const fileMatch = /^\/api\/files\/([^/]+)\/content$/.exec(req.originalUrl.split('?')[0]);
+  if (!token && req.method === 'GET' && fileMatch && typeof req.query.t === 'string') {
+    token = req.query.t;
+    fileScope = fileMatch[1];
+  }
   if (!token) throw unauthorized();
   let payload;
   try {
     payload = jwt.verify(token, config.jwtSecret);
   } catch {
     throw unauthorized('Invalid or expired token');
+  }
+  if (fileScope ? payload.purpose !== 'file' || payload.fid !== fileScope : payload.purpose) {
+    throw unauthorized('Invalid token');
   }
   // Re-read the user so deactivation and role changes take effect immediately.
   const { rows } = await query(

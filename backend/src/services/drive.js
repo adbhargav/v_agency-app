@@ -43,3 +43,12 @@ export async function getFile(driveFileId) {
   const { data } = await drive().files.get({ fileId: driveFileId, fields: FILE_FIELDS, supportsAllDrives: true });
   return data;
 }
+
+/** Streams a file's bytes from Drive (used to proxy downloads for users without Drive access). */
+export async function streamFile(driveFileId) {
+  const res = await drive().files.get(
+    { fileId: driveFileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' },
+  );
+  return res.data;
+}

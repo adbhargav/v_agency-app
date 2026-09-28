@@ -9,7 +9,7 @@ import { parse } from '../lib/validate.js';
 import { serializeFile, serializeFolder } from '../lib/serialize.js';
 import { assertProjectAccess } from '../services/projects.js';
 import { getServiceAuth } from '../services/google.js';
-import { createFolder, createUploadSession, getFile } from '../services/drive.js';
+import { createFolder, createUploadSession, getFile, streamFile } from '../services/drive.js';
 import { loadTaskRow } from '../services/tasks.js';
 import { approvedAssets } from './dashboard.js';
 
@@ -24,6 +24,20 @@ async function ensureProjectDriveFolder(project) {
   const id = await createFolder(`${rows[0].name} — ${project.name}`);
   await query('UPDATE projects SET drive_folder_id = $2 WHERE id = $1 AND drive_folder_id IS NULL', [project.id, id]);
   return id;
+}
+
+const REQUIREMENTS_FOLDER = 'Client Requirements';
+
+/** Finds or creates the project's "Client Requirements" folder, where requirement attachments go. */
+async function requirementsFolder(project) {
+  const { rows } = await query('SELECT * FROM folders WHERE project_id = $1 AND parent_id IS NULL AND name = $2', [project.id, REQUIREMENTS_FOLDER]);
+  if (rows[0]) return rows[0];
+  const driveFolderId = await createFolder(REQUIREMENTS_FOLDER, await ensureProjectDriveFolder(project));
+  const { rows: created } = await query(
+    `INSERT INTO folders (project_id, parent_id, drive_folder_id, name) VALUES ($1, NULL, $2, $3) RETURNING *`,
+    [project.id, driveFolderId, REQUIREMENTS_FOLDER],
+  );
+  return created[0];
 }
 
 async function loadFolder(projectId, folderId) {
@@ -90,11 +104,12 @@ router.post('/files/upload-session', async (req, res) => {
       name: z.string().trim().min(1).max(255),
       mimeType: z.string().max(255).optional(),
       size: z.number().int().nonnegative().optional(),
+      purpose: z.enum(['requirement']).optional(),
     }),
     req.body,
   );
   const project = await assertProjectAccess(req.user, b.projectId);
-  const folder = await loadFolder(b.projectId, b.folderId);
+  const folder = b.purpose === 'requirement' ? await requirementsFolder(project) : await loadFolder(b.projectId, b.folderId);
   if (b.taskId) {
     const task = await loadTaskRow(req.user, b.taskId);
     if (task.project_id !== b.projectId) throw badRequest('Task belongs to a different project');
@@ -143,6 +158,37 @@ router.patch('/files/:id', requireRole('admin'), async (req, res) => {
   const { rows } = await query('UPDATE files SET is_final = $2 WHERE id = $1 RETURNING *', [id, b.isFinal]);
   if (!rows[0]) throw notFound('File not found');
   res.json({ file: serializeFile(rows[0], req.user) });
+});
+
+/**
+ * Streams a file through the app so clients and employees can open it without a Google account on the
+ * Shared Drive. Nothing is written to disk: bytes are piped straight from Drive to the browser.
+ */
+router.get('/files/:id/content', async (req, res) => {
+  const id = parse(uuid, req.params.id);
+  const me = req.user;
+  const { rows } = await query(
+    `SELECT f.*, u.role AS uploader_role, p.client_id FROM files f
+       JOIN projects p ON p.id = f.project_id LEFT JOIN users u ON u.id = f.uploaded_by WHERE f.id = $1`,
+    [id],
+  );
+  const f = rows[0];
+  if (!f) throw notFound('File not found');
+  let allowed = me.role === 'admin';
+  if (me.role === 'client') allowed = f.client_id === me.clientId && (f.is_final || f.uploader_role === 'client');
+  if (me.role === 'employee') {
+    const { rowCount } = await query('SELECT 1 FROM tasks WHERE project_id = $1 AND assignee_id = $2 LIMIT 1', [f.project_id, me.id]);
+    allowed = rowCount > 0;
+  }
+  if (!allowed) throw notFound('File not found');
+  const stream = await streamFile(f.drive_file_id);
+  res.setHeader('Content-Type', f.mime_type || 'application/octet-stream');
+  if (f.size) res.setHeader('Content-Length', String(f.size));
+  const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(f.name)}`);
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  stream.on('error', (err) => res.destroy(err));
+  stream.pipe(res);
 });
 
 router.get('/files/approved', requireRole('client'), async (req, res) => {
