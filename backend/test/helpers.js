@@ -3,6 +3,10 @@ import request from 'supertest';
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/v_agency_test';
 process.env.ENABLE_JOBS = 'false';
+// Tests use fixed demo credentials, regardless of what a local .env sets.
+process.env.ADMIN_EMAIL = 'admin@vagency.com';
+process.env.ADMIN_PASSWORD = 'admin12345';
+delete process.env.ADMIN_RESET;
 for (const k of ['SMTP_HOST', 'GOOGLE_SERVICE_ACCOUNT_JSON', 'GOOGLE_SHARED_DRIVE_ID', 'GOOGLE_OAUTH_CLIENT_ID']) delete process.env[k];
 
 const { pool } = await import('../src/db/pool.js');

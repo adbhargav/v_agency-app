@@ -84,7 +84,21 @@ export async function seed({ demo = false } = {}) {
   const email = process.env.ADMIN_EMAIL || 'admin@vagency.com';
   const password = process.env.ADMIN_PASSWORD;
   const { rows: admins } = await query(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`);
-  if (!admins.length) {
+  if (process.env.ADMIN_RESET === 'true') {
+    // One-off recovery: make ADMIN_EMAIL an active admin with ADMIN_PASSWORD (creates it if missing).
+    // Remove ADMIN_RESET afterwards so later restarts leave the password alone.
+    if (!password || password.length < 8) throw new Error('ADMIN_RESET needs ADMIN_PASSWORD (8+ characters)');
+    const hash = await bcrypt.hash(password, 10);
+    const { rowCount } = await query(
+      `UPDATE users SET password_hash = $2, role = 'admin', is_active = true, employment_type = NULL, client_id = NULL
+        WHERE lower(email) = lower($1)`,
+      [email, hash],
+    );
+    if (!rowCount) {
+      await query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Agency Admin', $1, $2, 'admin')`, [email, hash]);
+    }
+    console.log(`Admin access reset for ${email}. Remove ADMIN_RESET now.`);
+  } else if (!admins.length) {
     // Never create a live admin with the well-known development password.
     if (process.env.NODE_ENV === 'production' && (!password || password.length < 8)) {
       throw new Error('Set ADMIN_PASSWORD (8+ characters) to create the first admin account');
