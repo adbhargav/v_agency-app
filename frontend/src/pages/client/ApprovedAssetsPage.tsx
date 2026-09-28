@@ -3,29 +3,39 @@ import { BadgeCheck, Download, ExternalLink, Search } from 'lucide-react';
 import { useApprovedFiles } from '../../api/hooks';
 import { isNotConfigured } from '../../api/client';
 import { formatBytes, formatDate } from '../../lib/format';
-import { FileIcon } from '../../components/FileManager';
+import { FileThumb } from '../../components/FileManager';
+import { DriveLink } from '../../components/FilePreview';
+import { downloadHref, fileHref } from '../../lib/files';
 import { EmptyState, ErrorState, PageHeader, Skeleton } from '../../components/ui';
 import type { DriveFile } from '../../types';
 
 export function AssetCard({ file }: { file: DriveFile }) {
-  const Wrapper = file.webViewLink ? 'a' : 'div';
+  const href = fileHref(file);
+  const download = file.contentUrl ? downloadHref(file) : null;
   return (
-    <Wrapper
-      {...(file.webViewLink ? { href: file.webViewLink, target: '_blank', rel: 'noreferrer' } : {})}
-      className="card group flex items-center gap-3 p-3 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
-    >
-      <FileIcon mime={file.mimeType} className="size-11" />
+    <div className="card group relative flex items-center gap-3 p-3 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
+      <FileThumb file={file} className="size-11" />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1 truncate text-sm font-medium text-slate-800">
           <span className="truncate">{file.name}</span>
           <BadgeCheck className="size-3.5 shrink-0 text-emerald-500" />
         </p>
-        <p className="text-xs text-slate-400">
+        <p className="flex items-center gap-2 text-xs text-slate-400">
           {formatBytes(file.size)} · {formatDate(file.createdAt)}
+          <DriveLink file={file} className="relative z-10" />
         </p>
       </div>
-      {file.webViewLink && <ExternalLink className="size-4 text-slate-300 group-hover:text-brand-500" />}
-    </Wrapper>
+      {download && (
+        <a href={download} className="relative z-10 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600" aria-label={`Download ${file.name}`} title="Download">
+          <Download className="size-4" />
+        </a>
+      )}
+      {href && (
+        <a href={href} target="_blank" rel="noreferrer" className="after:absolute after:inset-0 after:content-['']" aria-label={`Open ${file.name}`}>
+          <ExternalLink className="size-4 text-slate-300 group-hover:text-brand-500" />
+        </a>
+      )}
+    </div>
   );
 }
 

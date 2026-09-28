@@ -3,6 +3,7 @@ import { CalendarDays, Clock } from 'lucide-react';
 import { PriorityBadge } from './PriorityBadge';
 import { ApprovalBadge, Avatar, EmptyState, ProgressBar, StatusPill } from './ui';
 import { cn, formatDate, formatDuration } from '../lib/format';
+import { ServiceChip } from './ServiceChip';
 import type { Task } from '../types';
 
 interface Props {
@@ -43,6 +44,7 @@ export function TaskList({ tasks, onOpen, clientSafe, statusColor, empty = 'No t
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
+                {t.serviceType && <ServiceChip service={t.serviceType} size="sm" />}
                 <StatusPill name={t.masterStatusName} color={statusColor?.(t)} />
                 <ApprovalBadge state={t.approvalState} />
               </div>

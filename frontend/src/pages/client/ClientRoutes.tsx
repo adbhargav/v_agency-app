@@ -6,6 +6,9 @@ const ClientOverview = lazy(() => import('./ClientOverview'));
 const ActionRequiredPage = lazy(() => import('./ActionRequiredPage'));
 const ClientTasksPage = lazy(() => import('./ClientTasksPage'));
 const ApprovedAssetsPage = lazy(() => import('./ApprovedAssetsPage'));
+const ClientRequirementsPage = lazy(() => import('./RequirementsPage'));
+const NewRequirementPage = lazy(() => import('./NewRequirementPage'));
+const ClientRequirementDetailPage = lazy(() => import('./RequirementDetailPage'));
 const NotFoundPage = lazy(() => import('../shared/NotFoundPage'));
 
 export default function ClientRoutes() {
@@ -15,6 +18,9 @@ export default function ClientRoutes() {
       <Route path="actions" element={<ActionRequiredPage />} />
       <Route path="tasks" element={<ClientTasksPage />} />
       <Route path="assets" element={<ApprovedAssetsPage />} />
+      <Route path="requirements" element={<ClientRequirementsPage />} />
+      <Route path="requirements/new" element={<NewRequirementPage />} />
+      <Route path="requirements/:id" element={<ClientRequirementDetailPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

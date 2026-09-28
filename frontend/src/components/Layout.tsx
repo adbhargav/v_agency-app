@@ -5,7 +5,11 @@ import {
   Bell,
   Building2,
   ClipboardList,
+  FilePlus2,
+  FileText,
   FolderKanban,
+  Inbox,
+  Layers,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -20,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth, useUser } from '../context/AuthContext';
+import { useRequirements } from '../api/hooks';
 import { useTaskDrawer } from '../lib/useTaskDrawer';
 import { cn } from '../lib/format';
 import { ActiveTimerIndicator, NotificationBell } from './HeaderWidgets';
@@ -33,16 +38,19 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  badge?: number;
 }
 
-export function navFor(user: User): NavItem[] {
+export function navFor(user: User, counts: { newRequirements?: number } = {}): NavItem[] {
   if (user.role === 'admin')
     return [
       { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/admin/tasks', label: 'Tasks', icon: SquareKanban },
+      { to: '/admin/requirements', label: 'Requirements', icon: Inbox, badge: counts.newRequirements },
       { to: '/admin/projects', label: 'Projects', icon: FolderKanban },
       { to: '/admin/team', label: 'Team', icon: Users },
       { to: '/admin/clients', label: 'Clients', icon: Building2 },
+      { to: '/admin/services', label: 'Services', icon: Layers },
       { to: '/admin/finance', label: 'Finance', icon: Wallet },
       { to: '/admin/eod', label: 'EOD Reports', icon: ClipboardList },
       { to: '/admin/statuses', label: 'Master Statuses', icon: SlidersHorizontal },
@@ -53,6 +61,7 @@ export function navFor(user: User): NavItem[] {
     return [
       { to: '/app', label: 'My Board', icon: SquareKanban, end: true },
       { to: '/app/projects', label: 'Projects', icon: FolderKanban },
+      { to: '/app/briefs', label: 'Briefs', icon: FileText },
       { to: '/app/eod', label: 'EOD Update', icon: ClipboardList },
       ...(user.employmentType === 'project_based' ? [{ to: '/app/wallet', label: 'Wallet', icon: Wallet }] : []),
       { to: '/notifications', label: 'Notifications', icon: Bell },
@@ -60,6 +69,7 @@ export function navFor(user: User): NavItem[] {
     ];
   return [
     { to: '/client', label: 'Overview', icon: LayoutDashboard, end: true },
+    { to: '/client/requirements', label: 'Requirements', icon: FilePlus2 },
     { to: '/client/actions', label: 'Action Required', icon: MessageSquareWarning },
     { to: '/client/tasks', label: 'Active Tasks', icon: ListTodo },
     { to: '/client/assets', label: 'Approved Assets', icon: BadgeCheck },
@@ -100,6 +110,11 @@ function NavItems({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => 
             <>
               <item.icon className={cn('size-[18px] transition', isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600')} />
               {item.label}
+              {!!item.badge && (
+                <span className="ml-auto min-w-5 rounded-full bg-brand-600 px-1.5 text-center text-[11px] font-semibold leading-5 text-white" aria-label={`${item.badge} new`}>
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
             </>
           )}
         </NavLink>
@@ -141,7 +156,9 @@ export function PageFallback() {
 
 export function Layout({ children }: { children?: ReactNode }) {
   const user = useUser();
-  const items = navFor(user);
+  // Badge for the admin requirements inbox; refreshed in the background.
+  const { data: newRequirements } = useRequirements({ statuses: ['new'] }, { enabled: user.role === 'admin', refetchInterval: 60_000 });
+  const items = navFor(user, { newRequirements: newRequirements?.length });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const task = useTaskDrawer();
   const location = useLocation();
@@ -213,8 +230,13 @@ export function Layout({ children }: { children?: ReactNode }) {
             >
               {({ isActive }) => (
                 <>
-                  <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition', isActive && 'bg-brand-50')}>
+                  <span className={cn('relative flex h-7 w-12 items-center justify-center rounded-full transition', isActive && 'bg-brand-50')}>
                     <item.icon className="size-5" />
+                    {!!item.badge && (
+                      <span className="absolute -top-0.5 right-1.5 min-w-4 rounded-full bg-brand-600 px-1 text-center text-[9px] font-semibold leading-4 text-white">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </span>
                   <span className="max-w-full truncate px-1">{item.label}</span>
                 </>

@@ -9,6 +9,8 @@ const ClientsPage = lazy(() => import('./ClientsPage'));
 const FinancePage = lazy(() => import('./FinancePage'));
 const TeamEodPage = lazy(() => import('./TeamEodPage'));
 const MasterStatusesPage = lazy(() => import('./MasterStatusesPage'));
+const ServicesPage = lazy(() => import('./ServicesPage'));
+const RequirementsPage = lazy(() => import('./RequirementsPage'));
 const NotFoundPage = lazy(() => import('../shared/NotFoundPage'));
 
 export default function AdminRoutes() {
@@ -23,6 +25,8 @@ export default function AdminRoutes() {
       <Route path="finance" element={<FinancePage />} />
       <Route path="eod" element={<TeamEodPage />} />
       <Route path="statuses" element={<MasterStatusesPage />} />
+      <Route path="services" element={<ServicesPage />} />
+      <Route path="requirements" element={<RequirementsPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

@@ -27,6 +27,8 @@ export interface User {
   clientId: string | null;
   isActive: boolean;
   googleCalendarConnected: boolean;
+  /** Service teams the employee belongs to. */
+  serviceTypeIds?: string[];
   createdAt: string;
 }
 
@@ -38,6 +40,8 @@ export interface Client {
   phone: string | null;
   createdAt: string;
   projectCount: number;
+  /** Services the client buys. */
+  serviceTypeIds?: string[];
 }
 
 export interface MasterStatus {
@@ -100,6 +104,8 @@ export interface Task {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  serviceType?: ServiceTypeRef | null;
+  requirementId?: string | null;
 }
 
 export interface DriveFile {
@@ -113,6 +119,8 @@ export interface DriveFile {
   size: number;
   isFinal: boolean;
   webViewLink: string | null;
+  /** Streams the file through the app (no Google account needed). Expires after ~12h. */
+  contentUrl?: string | null;
   createdAt: string;
   uploadedBy?: UserRef;
 }
@@ -249,4 +257,89 @@ export interface TaskFilters {
   due?: 'overdue' | 'today' | 'week';
   search?: string;
   includeDone?: boolean;
+  serviceTypeIds?: string[];
+}
+
+// ---------------------------------------------------------------- services & requirements
+export type FieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'multiselect' | 'checkbox' | 'url' | 'file';
+
+export interface ServiceField {
+  id: string;
+  label: string;
+  type: FieldType;
+  required: boolean;
+  options: string[];
+  helpText: string | null;
+  position: number;
+}
+
+/** What PUT /service-types/:id/fields accepts. */
+export interface ServiceFieldInput {
+  id?: string;
+  label: string;
+  type: FieldType;
+  required?: boolean;
+  options?: string[];
+  helpText?: string | null;
+}
+
+export interface ServiceTypeRef {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface ServiceType extends ServiceTypeRef {
+  description: string | null;
+  isActive: boolean;
+  position: number;
+  fields: ServiceField[];
+  memberCount?: number;
+  requirementCount?: number;
+  createdAt: string;
+}
+
+export type RequirementStatus = 'new' | 'accepted' | 'declined';
+export type RequirementDisplayStatus = 'new' | 'in_progress' | 'completed' | 'declined';
+
+/** Answer value by field type: string | number | string[] | boolean | fileId[]. */
+export type AnswerValue = string | number | boolean | string[] | null;
+
+export interface RequirementAnswer {
+  fieldId: string;
+  label: string;
+  type: FieldType;
+  value: AnswerValue;
+  files?: DriveFile[];
+}
+
+export interface Requirement {
+  id: string;
+  title: string;
+  clientId: string;
+  clientName: string;
+  projectId: string;
+  projectName: string;
+  serviceType: ServiceTypeRef;
+  priority: Priority;
+  desiredDate: string | null;
+  status: RequirementStatus;
+  displayStatus: RequirementDisplayStatus;
+  declineReason: string | null;
+  answers: RequirementAnswer[];
+  files: DriveFile[];
+  taskCount: number;
+  doneCount: number;
+  progress: number;
+  submittedBy?: UserRef | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  tasks?: Task[];
+}
+
+export interface RequirementFilters {
+  statuses?: RequirementStatus[];
+  serviceTypeIds?: string[];
+  clientIds?: string[];
+  projectIds?: string[];
 }

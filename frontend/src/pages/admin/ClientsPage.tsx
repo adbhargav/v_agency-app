@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Building2, FolderKanban, KeyRound, Mail, Phone, Plus, UserPlus } from 'lucide-react';
-import { useClients, useCreateClient, useCreateUser, useUpdateUser, useUsers } from '../../api/hooks';
+import { Building2, FolderKanban, KeyRound, Layers, Mail, Phone, Plus, UserPlus } from 'lucide-react';
+import { useClients, useCreateClient, useCreateUser, useServiceTypes, useUpdateClient, useUpdateUser, useUsers } from '../../api/hooks';
+import { MultiSelect } from '../../components/MultiSelect';
+import { ColorDot, ServiceChip } from '../../components/ServiceChip';
+import { ServicePicker } from '../../components/ServicePicker';
 import { errorMessage } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { Avatar, EmptyState, ErrorState, Field, Modal, PageHeader, SkeletonList, Spinner, Toggle } from '../../components/ui';
@@ -11,6 +14,8 @@ export default function ClientsPage() {
   const { data: clients, isLoading, error, refetch } = useClients();
   const { data: clientUsers } = useUsers('client');
   const update = useUpdateUser();
+  const updateClient = useUpdateClient();
+  const { data: services } = useServiceTypes({ includeInactive: true });
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [loginFor, setLoginFor] = useState<Client | null>(null);
@@ -62,6 +67,33 @@ export default function ClientsPage() {
                     </p>
                   )}
                 </div>
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Services</p>
+                  <div className="mb-2">
+                    <MultiSelect
+                      label="Services"
+                      allLabel="Edit services"
+                      icon={<Layers className="size-4" />}
+                      options={(services ?? [])
+                        .filter((s) => s.isActive || c.serviceTypeIds?.includes(s.id))
+                        .map((s) => ({ value: s.id, label: s.name, icon: <ColorDot color={s.color} /> }))}
+                      value={c.serviceTypeIds ?? []}
+                      onChange={(v) =>
+                        updateClient.mutate({ id: c.id, serviceTypeIds: v }, { onError: (e) => toast(errorMessage(e), 'error') })
+                      }
+                    />
+                  </div>
+                  {c.serviceTypeIds?.length ? (
+                    <div className="flex flex-wrap gap-1">
+                      {c.serviceTypeIds.map((id) => {
+                        const s = services?.find((x) => x.id === id);
+                        return s ? <ServiceChip key={id} service={s} size="sm" /> : null;
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">None linked — the client can request any active service</p>
+                  )}
+                </div>
                 <div className="mt-4 flex-1 border-t border-slate-100 pt-3">
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Portal logins</p>
                   {logins.length === 0 ? (
@@ -106,14 +138,20 @@ export default function ClientsPage() {
 function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreateClient();
   const toast = useToast();
-  const empty = { name: '', company: '', email: '', phone: '' };
+  const empty = { name: '', company: '', email: '', phone: '', serviceTypeIds: [] as string[] };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState<string | null>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return setError('Name is required.');
     create.mutate(
-      { name: form.name.trim(), company: form.company.trim() || undefined, email: form.email.trim() || undefined, phone: form.phone.trim() || undefined },
+      {
+        name: form.name.trim(),
+        company: form.company.trim() || undefined,
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+        serviceTypeIds: form.serviceTypeIds.length ? form.serviceTypeIds : undefined,
+      },
       {
         onSuccess: () => {
           toast('Client created');
@@ -155,6 +193,14 @@ function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Field label="Phone">
             <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </Field>
+        </div>
+        <div>
+          <span className="label">Services they buy</span>
+          <ServicePicker
+            value={form.serviceTypeIds}
+            onChange={(serviceTypeIds) => setForm({ ...form, serviceTypeIds })}
+            emptyHint="Leave empty to let the client request any active service."
+          />
         </div>
         {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       </form>

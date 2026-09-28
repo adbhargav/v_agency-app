@@ -18,9 +18,13 @@ import type {
   Notification,
   Priority,
   Project,
+  Requirement,
+  RequirementFilters,
   Role,
   SalaryRecord,
   SalaryStatus,
+  ServiceFieldInput,
+  ServiceType,
   Task,
   TaskFilters,
   TimeEntry,
@@ -30,7 +34,8 @@ import type {
 
 // ---------------------------------------------------------------- keys
 export const qk = {
-  users: (role?: Role) => ['users', role ?? 'all'] as const,
+  users: (role?: Role, serviceTypeId?: string) =>
+    (serviceTypeId ? (['users', role ?? 'all', serviceTypeId] as const) : (['users', role ?? 'all'] as const)),
   clients: ['clients'] as const,
   masterStatuses: ['statuses', 'master'] as const,
   customStatuses: ['statuses', 'custom'] as const,
@@ -51,6 +56,9 @@ export const qk = {
   financeEmployees: ['finance', 'employees'] as const,
   wallet: (userId: string) => ['finance', 'wallet', userId] as const,
   salary: (userId: string) => ['finance', 'salary', userId] as const,
+  serviceTypes: (includeInactive = false) => ['serviceTypes', includeInactive ? 'all' : 'active'] as const,
+  requirements: (f?: RequirementFilters) => (f ? (['requirements', f] as const) : (['requirements'] as const)),
+  requirement: (id: string) => ['requirement', id] as const,
 };
 
 /** Invalidate everything a task change can affect. */
@@ -63,10 +71,10 @@ export function invalidateTaskViews(qc: QueryClient, taskId?: string) {
 }
 
 // ---------------------------------------------------------------- users & clients
-export const useUsers = (role?: Role, enabled = true) =>
+export const useUsers = (role?: Role, enabled = true, serviceTypeId?: string) =>
   useQuery({
-    queryKey: qk.users(role),
-    queryFn: () => http.get<{ users: User[] }>('/users', { role }).then((r) => r.users),
+    queryKey: qk.users(role, serviceTypeId),
+    queryFn: () => http.get<{ users: User[] }>('/users', { role, serviceTypeId }).then((r) => r.users),
     enabled,
   });
 
@@ -80,6 +88,7 @@ export function useCreateUser() {
       role: Role;
       employmentType?: EmploymentType;
       clientId?: string;
+      serviceTypeIds?: string[];
     }) => http.post<{ user: User }>('/users', body).then((r) => r.user),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -102,9 +111,19 @@ export function useUpdateUser() {
       clientId?: string;
       /** Admin password reset. */
       password?: string;
+      serviceTypeIds?: string[];
     }) =>
       http.patch<{ user: User }>(`/users/${id}`, body).then((r) => r.user),
-    onSuccess: () => {
+    // Optimistic so toggles and team chips feel instant.
+    onMutate: async ({ id, password: _pw, ...changes }) => {
+      await qc.cancelQueries({ queryKey: ['users'] });
+      const prev = qc.getQueriesData<User[]>({ queryKey: ['users'] });
+      for (const [key, data] of prev) if (data) qc.setQueryData(key, data.map((u) => (u.id === id ? { ...u, ...changes } : u)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['serviceTypes'] });
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['finance'] });
     },
@@ -121,7 +140,7 @@ export const useClients = (enabled = true) =>
 export function useCreateClient() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; company?: string; email?: string; phone?: string }) =>
+    mutationFn: (body: { name: string; company?: string; email?: string; phone?: string; serviceTypeIds?: string[] }) =>
       http.post<{ client: Client }>('/clients', body).then((r) => r.client),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.clients }),
   });
@@ -130,9 +149,25 @@ export function useCreateClient() {
 export function useUpdateClient() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; name?: string; company?: string; email?: string; phone?: string }) =>
-      http.patch<{ client: Client }>(`/clients/${id}`, body).then((r) => r.client),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.clients }),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      name?: string;
+      company?: string;
+      email?: string;
+      phone?: string;
+      serviceTypeIds?: string[];
+    }) => http.patch<{ client: Client }>(`/clients/${id}`, body).then((r) => r.client),
+    onMutate: async ({ id, ...changes }) => {
+      await qc.cancelQueries({ queryKey: qk.clients });
+      const prev = qc.getQueryData<Client[]>(qk.clients);
+      if (prev) qc.setQueryData(qk.clients, prev.map((c) => (c.id === id ? { ...c, ...changes } : c)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.clients, ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.clients }),
   });
 }
 
@@ -275,6 +310,7 @@ function filtersToQuery(f: TaskFilters) {
     due: f.due,
     search: f.search,
     includeDone: f.includeDone === undefined ? undefined : String(f.includeDone),
+    serviceTypeIds: f.serviceTypeIds,
   };
 }
 
@@ -302,6 +338,7 @@ export interface CreateTaskInput {
   assigneeId?: string;
   masterStatusId?: string;
   customStatusId?: string;
+  serviceTypeId?: string;
 }
 
 export function useCreateTask() {
@@ -322,6 +359,7 @@ export interface PatchTaskInput {
   percentDone?: number;
   masterStatusId?: string;
   customStatusId?: string | null;
+  serviceTypeId?: string | null;
 }
 
 /**
@@ -668,4 +706,152 @@ export function useFinanceMutations() {
       onSuccess,
     }),
   };
+}
+
+// ---------------------------------------------------------------- services
+export const useServiceTypes = (opts: { includeInactive?: boolean; enabled?: boolean } = {}) =>
+  useQuery({
+    queryKey: qk.serviceTypes(!!opts.includeInactive),
+    queryFn: () =>
+      http
+        .get<{ serviceTypes: ServiceType[] }>('/service-types', { includeInactive: opts.includeInactive ? 'true' : undefined })
+        .then((r) => r.serviceTypes),
+    enabled: opts.enabled ?? true,
+    staleTime: 60_000,
+  });
+
+export function useServiceTypeMutations() {
+  const qc = useQueryClient();
+  const settle = () => qc.invalidateQueries({ queryKey: ['serviceTypes'] });
+  const replace = (st: ServiceType) => {
+    for (const [key, data] of qc.getQueriesData<ServiceType[]>({ queryKey: ['serviceTypes'] }))
+      if (data) qc.setQueryData(key, data.map((x) => (x.id === st.id ? st : x)));
+  };
+  return {
+    create: useMutation({
+      mutationFn: (body: { name: string; description?: string | null; color?: string; fields?: ServiceFieldInput[] }) =>
+        http.post<{ serviceType: ServiceType }>('/service-types', body).then((r) => r.serviceType),
+      onSettled: settle,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, ...body }: { id: string; name?: string; description?: string | null; color?: string; isActive?: boolean; position?: number }) =>
+        http.patch<{ serviceType: ServiceType }>(`/service-types/${id}`, body).then((r) => r.serviceType),
+      onMutate: async ({ id, ...changes }) => {
+        await qc.cancelQueries({ queryKey: ['serviceTypes'] });
+        const prev = qc.getQueriesData<ServiceType[]>({ queryKey: ['serviceTypes'] });
+        for (const [key, data] of prev) if (data) qc.setQueryData(key, data.map((x) => (x.id === id ? { ...x, ...changes } : x)));
+        return { prev };
+      },
+      onError: (_e, _v, ctx) => ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data)),
+      onSuccess: replace,
+      onSettled: settle,
+    }),
+    saveFields: useMutation({
+      mutationFn: ({ id, fields }: { id: string; fields: ServiceFieldInput[] }) =>
+        http.put<{ serviceType: ServiceType }>(`/service-types/${id}/fields`, { fields }).then((r) => r.serviceType),
+      onSuccess: replace,
+      onSettled: settle,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => http.del(`/service-types/${id}`),
+      onSettled: settle,
+    }),
+  };
+}
+
+// ---------------------------------------------------------------- requirements
+export const useRequirements = (filters: RequirementFilters = {}, opts: { enabled?: boolean; refetchInterval?: number } = {}) =>
+  useQuery({
+    queryKey: qk.requirements(filters),
+    queryFn: () =>
+      http
+        .get<{ requirements: Requirement[] }>('/requirements', {
+          statuses: filters.statuses,
+          serviceTypeIds: filters.serviceTypeIds,
+          clientIds: filters.clientIds,
+          projectIds: filters.projectIds,
+        })
+        .then((r) => r.requirements),
+    enabled: opts.enabled ?? true,
+    refetchInterval: opts.refetchInterval,
+    placeholderData: (prev) => prev,
+  });
+
+export const useRequirement = (id: string | null | undefined) =>
+  useQuery({
+    queryKey: qk.requirement(id ?? ''),
+    queryFn: () => http.get<{ requirement: Requirement }>(`/requirements/${id}`).then((r) => r.requirement),
+    enabled: !!id,
+  });
+
+export interface CreateRequirementInput {
+  projectId: string;
+  serviceTypeId: string;
+  title: string;
+  priority?: Priority;
+  desiredDate?: string;
+  answers: Record<string, unknown>;
+}
+
+export function useCreateRequirement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateRequirementInput) =>
+      http.post<{ requirement: Requirement }>('/requirements', body).then((r) => r.requirement),
+    onSuccess: (r) => {
+      qc.setQueryData(qk.requirement(r.id), r);
+      qc.invalidateQueries({ queryKey: ['requirements'] });
+    },
+  });
+}
+
+function invalidateRequirement(qc: QueryClient, id: string) {
+  qc.invalidateQueries({ queryKey: ['requirements'] });
+  qc.invalidateQueries({ queryKey: qk.requirement(id) });
+  qc.invalidateQueries({ queryKey: ['serviceTypes'] });
+}
+
+export function useCreateRequirementTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requirementId,
+      ...body
+    }: {
+      requirementId: string;
+      title: string;
+      description?: string;
+      assigneeId?: string;
+      dueDate?: string;
+      priority?: Priority;
+    }) => http.post<{ task: Task }>(`/requirements/${requirementId}/tasks`, body).then((r) => r.task),
+    onSuccess: (task, v) => {
+      // Show the new task in the requirement right away, and mark it accepted.
+      qc.setQueryData<Requirement>(qk.requirement(v.requirementId), (r) =>
+        r
+          ? {
+              ...r,
+              status: 'accepted',
+              displayStatus: 'in_progress',
+              taskCount: r.taskCount + 1,
+              tasks: [...(r.tasks ?? []), task],
+            }
+          : r,
+      );
+      invalidateRequirement(qc, v.requirementId);
+      invalidateTaskViews(qc);
+    },
+  });
+}
+
+export function useDeclineRequirement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      http.post<{ requirement: Requirement }>(`/requirements/${id}/decline`, { reason }).then((r) => r.requirement),
+    onSuccess: (r) => {
+      qc.setQueryData<Requirement>(qk.requirement(r.id), (old) => ({ ...r, tasks: old?.tasks ?? r.tasks }));
+      invalidateRequirement(qc, r.id);
+    },
+  });
 }

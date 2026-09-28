@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useCreateTask, useCustomStatuses, useMasterStatuses, useProjects, useUsers } from '../api/hooks';
+import { useCreateTask, useCustomStatuses, useMasterStatuses, useProjects, useServiceTypes, useUsers } from '../api/hooks';
 import { errorMessage } from '../api/client';
 import { useUser } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTaskDrawer } from '../lib/useTaskDrawer';
+import { dateInputToISO } from '../lib/format';
 import { PrioritySelect } from './PriorityBadge';
 import { Field, Modal, Spinner } from './ui';
 import type { Priority } from '../types';
@@ -22,6 +23,7 @@ export function CreateTaskModal({ open, onClose, projectId, customStatusId }: Pr
   const { data: employees } = useUsers('employee', isAdmin && open);
   const { data: masters } = useMasterStatuses();
   const { data: customs } = useCustomStatuses(user.role === 'employee' && open);
+  const { data: services } = useServiceTypes({ enabled: isAdmin && open });
   const create = useCreateTask();
   const toast = useToast();
   const drawer = useTaskDrawer();
@@ -34,6 +36,7 @@ export function CreateTaskModal({ open, onClose, projectId, customStatusId }: Pr
     priority: '' as Priority | '',
     assigneeId: '',
     statusId: customStatusId ?? '',
+    serviceTypeId: '',
   });
   const [form, setForm] = useState(blank);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +59,10 @@ export function CreateTaskModal({ open, onClose, projectId, customStatusId }: Pr
         projectId: form.projectId,
         title: form.title.trim(),
         description: form.description.trim() || undefined,
-        dueDate: form.dueDate || undefined,
+        dueDate: dateInputToISO(form.dueDate),
         priority: form.priority,
         ...(isAdmin
-          ? { assigneeId: form.assigneeId || undefined, masterStatusId: form.statusId || undefined }
+          ? { assigneeId: form.assigneeId || undefined, masterStatusId: form.statusId || undefined, serviceTypeId: form.serviceTypeId || undefined }
           : { customStatusId: form.statusId || undefined }),
       },
       {
@@ -146,6 +149,18 @@ export function CreateTaskModal({ open, onClose, projectId, customStatusId }: Pr
                       {u.name}
                     </option>
                   ))}
+              </select>
+            </Field>
+          )}
+          {isAdmin && (
+            <Field label="Service / team (optional)">
+              <select className="input" value={form.serviceTypeId} onChange={(e) => setForm({ ...form, serviceTypeId: e.target.value })}>
+                <option value="">No service</option>
+                {services?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
             </Field>
           )}

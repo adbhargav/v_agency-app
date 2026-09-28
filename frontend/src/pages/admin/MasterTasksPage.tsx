@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, FolderKanban, LayoutList, Plus, Search, SquareKanban, Users, X, Flag, CalendarClock } from 'lucide-react';
-import { useClients, useMasterStatuses, usePatchTask, useProjects, useTasks, useUsers } from '../../api/hooks';
+import { Building2, FolderKanban, LayoutList, Plus, Search, SquareKanban, Users, X, Flag, CalendarClock, Layers } from 'lucide-react';
+import { useClients, useMasterStatuses, usePatchTask, useProjects, useServiceTypes, useTasks, useUsers } from '../../api/hooks';
+import { ColorDot } from '../../components/ServiceChip';
 import { errorMessage } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { useTaskDrawer } from '../../lib/useTaskDrawer';
@@ -27,6 +28,7 @@ export default function MasterTasksPage() {
   const clientIds = list(params.get('clients'));
   const projectIds = list(params.get('projects'));
   const priorities = list(params.get('priorities')) as Priority[];
+  const serviceTypeIds = list(params.get('services'));
   const due = (params.get('due') || undefined) as TaskFilters['due'];
   const search = params.get('q') ?? '';
   const includeDone = params.get('done') !== '0';
@@ -59,6 +61,7 @@ export default function MasterTasksPage() {
       clientIds: clientIds.length ? clientIds : undefined,
       projectIds: projectIds.length ? projectIds : undefined,
       priorities: priorities.length ? priorities : undefined,
+      serviceTypeIds: serviceTypeIds.length ? serviceTypeIds : undefined,
       due,
       search: search || undefined,
       includeDone,
@@ -72,6 +75,7 @@ export default function MasterTasksPage() {
   const { data: employees } = useUsers('employee');
   const { data: clients } = useClients();
   const { data: projects } = useProjects();
+  const { data: services } = useServiceTypes({ includeInactive: true });
   const patch = usePatchTask();
 
   const visibleProjects = useMemo(
@@ -92,7 +96,7 @@ export default function MasterTasksPage() {
     }));
   }, [masters, tasks, includeDone]);
 
-  const activeFilterCount = [assigneeIds.length, clientIds.length, projectIds.length, priorities.length, due ? 1 : 0, search ? 1 : 0].filter(Boolean).length;
+  const activeFilterCount = [assigneeIds.length, clientIds.length, projectIds.length, priorities.length, serviceTypeIds.length, due ? 1 : 0, search ? 1 : 0].filter(Boolean).length;
 
   return (
     <div>
@@ -139,6 +143,14 @@ export default function MasterTasksPage() {
             options={(employees ?? []).map((u) => ({ value: u.id, label: u.name + (u.isActive ? '' : ' (inactive)') }))}
             value={assigneeIds}
             onChange={(v) => set('assignees', v)}
+          />
+          <MultiSelect
+            label="Services"
+            allLabel="All services / teams"
+            icon={<Layers className="size-4" />}
+            options={(services ?? []).map((s) => ({ value: s.id, label: s.name + (s.isActive ? '' : ' (inactive)'), icon: <ColorDot color={s.color} /> }))}
+            value={serviceTypeIds}
+            onChange={(v) => set('services', v)}
           />
           <MultiSelect
             label="Clients"

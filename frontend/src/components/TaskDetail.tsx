@@ -3,6 +3,8 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  ChevronDown,
+  ClipboardList,
   Clock,
   FolderKanban,
   MessageSquare,
@@ -22,6 +24,8 @@ import {
   useMasterStatuses,
   usePatchTask,
   useRequestRevision,
+  useRequirement,
+  useServiceTypes,
   useSubmitTask,
   useTask,
   useTimeEntries,
@@ -30,10 +34,12 @@ import {
 import { errorMessage } from '../api/client';
 import { useUser } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { cn, formatDate, formatDateTime, formatDuration, relativeTime, toDateInput } from '../lib/format';
+import { cn, dateInputToISO, formatDate, formatDateTime, formatDuration, relativeTime, toDateInput } from '../lib/format';
 import { PriorityBadge, PrioritySelect } from './PriorityBadge';
 import { TimerControl } from './TimerControl';
 import { AttachmentPicker, FileChip } from './Attachments';
+import { ServiceChip } from './ServiceChip';
+import { RequirementAnswers } from './RequirementView';
 import { ApprovalBadge, Avatar, Drawer, ErrorState, Field, Modal, ProgressBar, Skeleton, Spinner, StatusPill, Tabs } from './ui';
 import type { Comment, CommentKind, DriveFile, Priority, Task } from '../types';
 
@@ -76,6 +82,7 @@ function TaskDetail({ taskId, onClose }: { taskId: string; onClose: () => void }
             <RevisionBanner task={task} />
             <ActionBar task={task} />
             {user.role === 'employee' && <TimerControl task={task} />}
+            {!isClient && task.requirementId && <ClientBrief requirementId={task.requirementId} />}
             {isClient ? <ClientReadOnly task={task} /> : <EditForm task={task} onDeleted={onClose} />}
             <div>
               {isClient ? (
@@ -107,6 +114,7 @@ function Header({ task }: { task: Task }) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
+        {task.serviceType && <ServiceChip service={task.serviceType} />}
         <PriorityBadge priority={task.priority} />
         <StatusPill name={task.masterStatusName} />
         <ApprovalBadge state={task.approvalState} />
@@ -378,6 +386,7 @@ function EditForm({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
   const { data: masters } = useMasterStatuses();
   const { data: customs } = useCustomStatuses(user.role === 'employee');
   const { data: employees } = useUsers('employee', isAdmin);
+  const { data: services } = useServiceTypes({ includeInactive: true, enabled: isAdmin });
 
   const [form, setForm] = useState(() => toForm(task));
   const [percent, setPercent] = useState(task.percentDone);
@@ -396,9 +405,10 @@ function EditForm({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
         id: task.id,
         title: form.title.trim(),
         description: form.description,
-        dueDate: form.dueDate || null,
+        // Keep the stored time if the day didn't change; otherwise end of the picked local day.
+        dueDate: form.dueDate ? (form.dueDate === toDateInput(task.dueDate) ? task.dueDate : dateInputToISO(form.dueDate)) : null,
         priority: form.priority,
-        ...(isAdmin ? { assigneeId: form.assigneeId || null } : {}),
+        ...(isAdmin ? { assigneeId: form.assigneeId || null, serviceTypeId: form.serviceTypeId || null } : {}),
       },
       { onSuccess: () => toast('Task updated'), onError: (e) => toast(errorMessage(e), 'error') },
     );
@@ -506,6 +516,20 @@ function EditForm({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
             </Field>
           )}
         </div>
+        {isAdmin && (
+          <Field label="Service / team">
+            <select className="input" value={form.serviceTypeId} onChange={(e) => setForm({ ...form, serviceTypeId: e.target.value })}>
+              <option value="">No service</option>
+              {services
+                ?.filter((s) => s.isActive || s.id === form.serviceTypeId)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+        )}
         <div>
           <span className="label">Priority</span>
           <PrioritySelect value={form.priority} onChange={(priority) => setForm({ ...form, priority })} />
@@ -546,7 +570,38 @@ function toForm(t: Task) {
     dueDate: toDateInput(t.dueDate),
     priority: t.priority as Priority,
     assigneeId: t.assignee?.id ?? '',
+    serviceTypeId: t.serviceType?.id ?? '',
   };
+}
+
+/** The client's requirement behind this task: answers, references and files. */
+function ClientBrief({ requirementId }: { requirementId: string }) {
+  const [open, setOpen] = useState(true);
+  const { data: r, isLoading, error, refetch } = useRequirement(requirementId);
+  return (
+    <section className="overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-b from-brand-50/70 to-white">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white">
+          <ClipboardList className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-900">Client brief</p>
+          <p className="truncate text-xs text-slate-500">
+            {r ? `${r.title} · submitted ${formatDate(r.createdAt)}${r.desiredDate ? ` · wanted by ${formatDate(r.desiredDate)}` : ''}` : 'Loading…'}
+          </p>
+        </div>
+        {r && <ServiceChip service={r.serviceType} size="sm" className="hidden sm:inline-flex" />}
+        <ChevronDown className={cn('size-4 shrink-0 text-slate-400 transition', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="border-t border-brand-100 bg-white px-4 py-4">
+          {isLoading && <Skeleton className="h-24 w-full" />}
+          {error && <ErrorState error={error} onRetry={() => refetch()} />}
+          {r && <RequirementAnswers requirement={r} />}
+        </div>
+      )}
+    </section>
+  );
 }
 
 const KIND_STYLE: Record<CommentKind, { label?: string; className: string }> = {

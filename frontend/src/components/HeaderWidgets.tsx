@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useUser } from '../context/AuthContext';
 import { Bell, CheckCheck, Pause } from 'lucide-react';
 import { useActiveTimer, useNotificationMutations, useNotifications, useTimerControl } from '../api/hooks';
 import { useTaskDrawer } from '../lib/useTaskDrawer';
@@ -87,6 +88,8 @@ export function NotificationList({ compact, onNavigate }: { compact?: boolean; o
   const { data, isLoading } = useNotifications();
   const { markRead, readAll } = useNotificationMutations();
   const drawer = useTaskDrawer();
+  const navigate = useNavigate();
+  const user = useUser();
   const items = data?.notifications ?? [];
   const shown = compact ? items.slice(0, 8) : items;
 
@@ -94,6 +97,9 @@ export function NotificationList({ compact, onNavigate }: { compact?: boolean; o
     if (!n.readAt) markRead.mutate(n.id);
     if (n.taskId) {
       drawer.open(n.taskId);
+      onNavigate?.();
+    } else if (n.type.startsWith('requirement_')) {
+      navigate(user.role === 'admin' ? '/admin/requirements' : user.role === 'client' ? '/client/requirements' : '/app/briefs');
       onNavigate?.();
     }
   };

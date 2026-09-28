@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, FolderKanban, MessageSquareWarning } from 'lucide-react';
+import { ArrowRight, BadgeCheck, FilePlus2, FolderKanban, MessageSquareWarning } from 'lucide-react';
 import { useClientDashboard } from '../../api/hooks';
 import { useUser } from '../../context/AuthContext';
 import { ProjectCard } from '../shared/Projects';
@@ -13,7 +13,15 @@ export default function ClientOverview() {
 
   return (
     <div>
-      <PageHeader title={`Welcome, ${user.name.split(' ')[0]}`} subtitle="A bird's-eye view of your projects with V Agency." />
+      <PageHeader
+        title={`Welcome, ${user.name.split(' ')[0]}`}
+        subtitle="A bird's-eye view of your projects with V Agency."
+        actions={
+          <Link to="/client/requirements/new" className="btn-primary">
+            <FilePlus2 className="size-4" /> New requirement
+          </Link>
+        }
+      />
       {error && <ErrorState error={error} onRetry={() => refetch()} />}
 
       {pending > 0 && (

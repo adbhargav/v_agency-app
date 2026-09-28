@@ -8,6 +8,8 @@ export interface UploadParams {
   file: File;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  /** 'requirement' stores the file in the project's requirements folder (client briefs). */
+  purpose?: 'requirement';
 }
 
 /**
@@ -16,7 +18,7 @@ export interface UploadParams {
  * 2. PUT the raw bytes straight to Google (XHR for progress events). Google replies with the Drive file JSON (`id`).
  * 3. POST /files/complete { uploadToken, driveFileId } → { file }
  */
-export async function uploadFile({ projectId, folderId, taskId, file, onProgress, signal }: UploadParams): Promise<DriveFile> {
+export async function uploadFile({ projectId, folderId, taskId, file, onProgress, signal, purpose }: UploadParams): Promise<DriveFile> {
   const { uploadUrl, uploadToken } = await http.post<{ uploadUrl: string; uploadToken: string }>('/files/upload-session', {
     projectId,
     folderId: folderId || undefined,
@@ -24,6 +26,7 @@ export async function uploadFile({ projectId, folderId, taskId, file, onProgress
     name: file.name,
     mimeType: file.type || 'application/octet-stream',
     size: file.size,
+    purpose,
   });
 
   const driveFileId = await new Promise<string>((resolve, reject) => {

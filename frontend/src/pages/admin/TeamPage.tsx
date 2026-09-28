@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Briefcase, CalendarCheck2, KeyRound, Search, UserPlus, Users } from 'lucide-react';
-import { useCreateUser, useUpdateUser, useUsers } from '../../api/hooks';
+import { Briefcase, CalendarCheck2, KeyRound, Layers, Search, UserPlus, Users } from 'lucide-react';
+import { useCreateUser, useServiceTypes, useUpdateUser, useUsers } from '../../api/hooks';
+import { MultiSelect } from '../../components/MultiSelect';
+import { ColorDot, ServiceChip } from '../../components/ServiceChip';
+import { ServicePicker } from '../../components/ServicePicker';
 import { errorMessage } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { cn, formatDate } from '../../lib/format';
@@ -11,6 +14,7 @@ const TYPE_LABEL: Record<EmploymentType, string> = { project_based: 'Project-bas
 
 export default function TeamPage() {
   const { data: users, isLoading, error, refetch } = useUsers('employee');
+  const { data: services } = useServiceTypes({ includeInactive: true });
   const update = useUpdateUser();
   const toast = useToast();
   const [q, setQ] = useState('');
@@ -53,9 +57,25 @@ export default function TeamPage() {
                   <p className="truncate text-xs text-slate-500">
                     {u.email} · joined {formatDate(u.createdAt, { month: 'short', year: 'numeric' })}
                   </p>
+                  {!!u.serviceTypeIds?.length && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {u.serviceTypeIds.map((id) => {
+                        const s = services?.find((x) => x.id === id);
+                        return s ? <ServiceChip key={id} service={s} size="sm" /> : null;
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <MultiSelect
+                  label="Teams"
+                  allLabel="No team"
+                  icon={<Layers className="size-4" />}
+                  options={(services ?? []).filter((s) => s.isActive || u.serviceTypeIds?.includes(s.id)).map((s) => ({ value: s.id, label: s.name, icon: <ColorDot color={s.color} /> }))}
+                  value={u.serviceTypeIds ?? []}
+                  onChange={(v) => update.mutate({ id: u.id, serviceTypeIds: v }, { onError: (err) => toast(errorMessage(err), 'error') })}
+                />
                 <div className="flex items-center gap-2">
                   <Briefcase className="size-4 text-slate-400" />
                   <select
@@ -102,7 +122,7 @@ export default function TeamPage() {
 function OnboardModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreateUser();
   const toast = useToast();
-  const empty = { name: '', email: '', password: '', employmentType: 'project_based' as EmploymentType };
+  const empty = { name: '', email: '', password: '', employmentType: 'project_based' as EmploymentType, serviceTypeIds: [] as string[] };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,6 +187,10 @@ function OnboardModal({ open, onClose }: { open: boolean; onClose: () => void })
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <span className="label">Service teams</span>
+          <ServicePicker value={form.serviceTypeIds} onChange={(serviceTypeIds) => setForm({ ...form, serviceTypeIds })} emptyHint="Used to suggest the right people when turning client requirements into tasks." />
         </div>
         {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       </form>

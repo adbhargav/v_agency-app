@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { AlarmClock, ArrowRight, BadgeCheck, CalendarClock, Clock3, FolderKanban, HandCoins, Hourglass, Landmark, ShieldCheck, Users } from 'lucide-react';
-import { useAdminDashboard } from '../../api/hooks';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlarmClock, ArrowRight, BadgeCheck, CalendarClock, Clock3, FolderKanban, HandCoins, Hourglass, Inbox, Landmark, ShieldCheck, Users } from 'lucide-react';
+import { useAdminDashboard, useRequirements } from '../../api/hooks';
+import { RequirementRow } from '../../components/RequirementView';
 import { useUser } from '../../context/AuthContext';
 import { useTaskDrawer } from '../../lib/useTaskDrawer';
 import { cn, formatMoney } from '../../lib/format';
@@ -56,6 +57,8 @@ export default function AdminDashboard() {
         </div>
       </section>
 
+      <NewRequirements />
+
       {/* 2. Overdue */}
       <section className="mb-6">
         <SectionTitle icon={<AlarmClock className="size-4" />} title="Overdue Tasks" tone="rose" count={data?.overdueTasks.length} />
@@ -98,6 +101,37 @@ export default function AdminDashboard() {
         </section>
       )}
     </div>
+  );
+}
+
+function NewRequirements() {
+  const navigate = useNavigate();
+  const { data, isLoading } = useRequirements({ statuses: ['new'] }, { refetchInterval: 60_000 });
+  return (
+    <section className="mb-6">
+      <div className="flex items-center justify-between gap-2">
+        <SectionTitle icon={<Inbox className="size-4" />} title="New Requirements" tone="brand" count={data?.length} />
+        <Link to="/admin/requirements" className="mb-3 text-sm font-medium text-brand-600 hover:text-brand-700">
+          Open inbox →
+        </Link>
+      </div>
+      <div className="card overflow-hidden border-t-4 border-t-brand-500">
+        {isLoading ? (
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </div>
+        ) : !data?.length ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-400">No new client requirements</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {data.slice(0, 5).map((r) => (
+              <RequirementRow key={r.id} requirement={r} onOpen={() => navigate(`/admin/requirements?requirement=${r.id}`)} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

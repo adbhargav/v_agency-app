@@ -1,6 +1,7 @@
 import { CalendarDays, Clock, MessageSquareWarning, Timer } from 'lucide-react';
 import { PriorityBadge } from './PriorityBadge';
 import { ApprovalBadge, Avatar, ProgressBar } from './ui';
+import { ServiceChip } from './ServiceChip';
 import { cn, formatDate, formatDuration } from '../lib/format';
 import type { Task } from '../types';
 
@@ -43,6 +44,7 @@ export function TaskCard({ task, onClick, clientSafe, showProject = true, draggi
               {!clientSafe && task.clientName ? ` · ${task.clientName}` : ''}
             </p>
           )}
+          {task.serviceType && <ServiceChip service={task.serviceType} size="sm" className="mt-1.5" />}
         </div>
         {!clientSafe && task.activeTimer && (
           <span className="flex size-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600" title="Timer running">

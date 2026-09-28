@@ -6,6 +6,7 @@ import { ProjectDetailPage, ProjectsListPage } from '../shared/Projects';
 const EmployeeBoard = lazy(() => import('./EmployeeBoard'));
 const EodPage = lazy(() => import('./EodPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
+const BriefsPage = lazy(() => import('./BriefsPage'));
 const NotFoundPage = lazy(() => import('../shared/NotFoundPage'));
 
 export default function EmployeeRoutes() {
@@ -16,6 +17,7 @@ export default function EmployeeRoutes() {
       <Route path="projects" element={<ProjectsListPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />
       <Route path="eod" element={<EodPage />} />
+      <Route path="briefs" element={<BriefsPage />} />
       <Route path="wallet" element={user.employmentType === 'project_based' ? <WalletPage /> : <Navigate to="/app" replace />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

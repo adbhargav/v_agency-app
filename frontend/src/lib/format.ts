@@ -67,3 +67,13 @@ export function initials(name: string) {
     .map((p) => p[0]!.toUpperCase())
     .join('');
 }
+
+/**
+ * The API stores due dates as timestamps (ISO with offset). A date picked in an <input type="date">
+ * is sent as the end of that local day so "due Friday" stays Friday in every timezone.
+ */
+export function dateInputToISO(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(`${value}T23:59:00`);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}

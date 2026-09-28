@@ -19,6 +19,8 @@ import { errorMessage, isNotConfigured } from '../api/client';
 import { useUser } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { cn, formatBytes, formatDate } from '../lib/format';
+import { fileHref, isImage } from '../lib/files';
+import { DriveLink } from './FilePreview';
 import { EmptyState, ErrorState, Field, Modal, Skeleton, Spinner, Toggle } from './ui';
 import type { DriveFile } from '../types';
 
@@ -246,13 +248,28 @@ export function FileManager({ projectId }: { projectId: string }) {
   );
 }
 
+/** Image files get a real thumbnail (via the app's content link); others a typed icon. */
+export function FileThumb({ file, className }: { file: DriveFile; className?: string }) {
+  const href = fileHref(file);
+  if (isImage(file) && file.contentUrl && href)
+    return <img src={href} alt="" loading="lazy" className={cn('size-9 shrink-0 rounded-xl object-cover ring-1 ring-slate-200', className)} />;
+  return <FileIcon mime={file.mimeType} className={className} />;
+}
+
 function FileRow({ file, canToggle, onToggle }: { file: DriveFile; canToggle: boolean; onToggle: (v: boolean) => void }) {
+  const href = fileHref(file);
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
-      <FileIcon mime={file.mimeType} />
+      <FileThumb file={file} />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-800">
-          <span className="truncate">{file.name}</span>
+          {href ? (
+            <a href={href} target="_blank" rel="noreferrer" className="truncate hover:text-brand-600">
+              {file.name}
+            </a>
+          ) : (
+            <span className="truncate">{file.name}</span>
+          )}
           {file.isFinal && <BadgeCheck className="size-4 shrink-0 text-emerald-500" aria-label="Approved asset" />}
         </p>
         <p className="truncate text-xs text-slate-400">
@@ -271,8 +288,9 @@ function FileRow({ file, canToggle, onToggle }: { file: DriveFile; canToggle: bo
           <Toggle checked={file.isFinal} onChange={onToggle} label="Approved asset" />
         </span>
       )}
-      {file.webViewLink && (
-        <a href={file.webViewLink} target="_blank" rel="noreferrer" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600" aria-label={`Open ${file.name}`}>
+      <DriveLink file={file} className="hidden sm:inline-flex" />
+      {href && (
+        <a href={href} target="_blank" rel="noreferrer" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600" aria-label={`Open ${file.name}`}>
           <ExternalLink className="size-4" />
         </a>
       )}

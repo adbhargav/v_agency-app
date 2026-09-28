@@ -3,7 +3,6 @@ import { FileText, Paperclip, X } from 'lucide-react';
 import { uploadFile } from '../api/upload';
 import { errorMessage } from '../api/client';
 import { useToast } from '../context/ToastContext';
-import { formatBytes } from '../lib/format';
 import type { DriveFile } from '../types';
 
 interface Props {
@@ -69,19 +68,5 @@ export function AttachmentPicker({ projectId, taskId, files, onChange }: Props) 
   );
 }
 
-export function FileChip({ file }: { file: DriveFile }) {
-  const content = (
-    <>
-      <FileText className="size-3.5 shrink-0" />
-      <span className="max-w-[12rem] truncate">{file.name}</span>
-      {!!file.size && <span className="text-slate-400">{formatBytes(file.size)}</span>}
-    </>
-  );
-  return file.webViewLink ? (
-    <a href={file.webViewLink} target="_blank" rel="noreferrer" className="chip bg-white py-1 text-slate-700 ring-1 ring-slate-200 hover:ring-brand-300">
-      {content}
-    </a>
-  ) : (
-    <span className="chip bg-white py-1 text-slate-700 ring-1 ring-slate-200">{content}</span>
-  );
-}
+/** Comment / revision attachment chip — opens through the app (contentUrl), with a Drive link for admins. */
+export { FileLinkChip as FileChip } from './FilePreview';
