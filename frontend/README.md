@@ -32,6 +32,26 @@ The dev server proxies `/api` → `http://localhost:4000`, so start the backend 
 In production, serve `dist/` with an SPA fallback (all unknown paths → `index.html`) and route `/api` to the backend
 (or set `VITE_API_URL` at build time). The Google Calendar OAuth flow returns to `/settings?calendar=connected|error`.
 
+## Deploying to Vercel
+
+`vercel.json` sets up the Vite build, the SPA fallback, long caching for hashed assets, and a rewrite that proxies
+`/api/*` to the backend. The browser only talks to the Vercel domain, so no CORS setup is needed and file links
+(`/api/files/...`) work as they are.
+
+1. In Vercel, import the repository and set **Root Directory** to `frontend`.
+2. In `vercel.json`, replace `https://YOUR-BACKEND-URL` with your deployed backend, e.g. `https://v-agency-api.onrender.com`.
+   Vercel rewrites cannot read environment variables, so the backend address has to be written in this file.
+3. On the backend, set `APP_URL` to the Vercel URL (e.g. `https://v-agency.vercel.app`) so email links and the
+   Google Calendar redirect return to the app. Set `GOOGLE_OAUTH_REDIRECT_URI` to `https://<vercel-domain>/api/calendar/oauth/callback`.
+
+Leave `VITE_API_URL` unset (it defaults to `/api`). To skip the proxy and call the backend directly, set
+`VITE_API_URL=https://<backend>/api` in Vercel's environment variables, remove the `/api` rewrite, and set
+`CORS_ORIGIN` on the backend to the Vercel URL. Consider this if clients stream large videos, since proxied
+requests are subject to Vercel's rewrite limits.
+
+The backend (Express + PostgreSQL + background jobs) is a long-running server. Deploy it separately, on a host like
+Render, Railway or Fly.io.
+
 ## Structure
 
 ```
