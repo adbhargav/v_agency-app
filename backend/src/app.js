@@ -50,7 +50,15 @@ export function createApp() {
   if (config.env !== 'test') app.use(morgan('dev'));
 
   const api = express.Router();
-  api.get('/health', (_req, res) => res.json({ ok: true }));
+  // Public setup check: is the database reachable and has the first admin been created?
+  api.get('/health', async (_req, res) => {
+    try {
+      const { rows } = await query(`SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND is_active) AS admin`);
+      res.json({ ok: true, database: true, adminReady: rows[0].admin });
+    } catch {
+      res.status(503).json({ ok: false, database: false, adminReady: false });
+    }
+  });
   api.use('/auth', authRoutes);
   api.use('/calendar', calendarRoutes);
 

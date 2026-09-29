@@ -72,22 +72,27 @@ async function seedServices() {
   }
 }
 
-/** Idempotent: master statuses + first admin. Pass --demo for sample clients, staff, projects and tasks. */
-export async function seed({ demo = false } = {}) {
-  await migrate();
-  const { rows: existing } = await query('SELECT COUNT(*)::int AS n FROM master_statuses');
-  if (!existing[0].n) {
-    for (const [i, s] of MASTER.entries()) {
-      await query('INSERT INTO master_statuses (name, color, is_done, position) VALUES ($1, $2, $3, $4)', [s.name, s.color, s.isDone, i]);
-    }
-  }
-  const email = process.env.ADMIN_EMAIL || 'admin@vagency.com';
-  const password = process.env.ADMIN_PASSWORD;
+/**
+ * Creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD when none exists, or resets that account when
+ * ADMIN_RESET=true. In `strict` mode (the seed CLI) problems throw; on server start they are only logged,
+ * so a missing setting never takes the API down.
+ */
+export async function ensureAdmin({ strict = true } = {}) {
+  // Dashboard-pasted values often carry stray spaces or newlines.
+  const email = (process.env.ADMIN_EMAIL || 'admin@vagency.com').trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD?.trim();
+  const reset = process.env.ADMIN_RESET?.trim().toLowerCase() === 'true';
+  const isProd = process.env.NODE_ENV === 'production';
+  const fail = (msg) => {
+    if (strict) throw new Error(msg);
+    console.error(`[setup] ${msg}`);
+  };
   const { rows: admins } = await query(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`);
-  if (process.env.ADMIN_RESET === 'true') {
+
+  if (reset) {
     // One-off recovery: make ADMIN_EMAIL an active admin with ADMIN_PASSWORD (creates it if missing).
     // Remove ADMIN_RESET afterwards so later restarts leave the password alone.
-    if (!password || password.length < 8) throw new Error('ADMIN_RESET needs ADMIN_PASSWORD (8+ characters)');
+    if (!password || password.length < 8) return fail('ADMIN_RESET needs ADMIN_PASSWORD (8+ characters)');
     const hash = await bcrypt.hash(password, 10);
     const { rowCount } = await query(
       `UPDATE users SET password_hash = $2, role = 'admin', is_active = true, employment_type = NULL, client_id = NULL
@@ -97,18 +102,32 @@ export async function seed({ demo = false } = {}) {
     if (!rowCount) {
       await query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Agency Admin', $1, $2, 'admin')`, [email, hash]);
     }
-    console.log(`Admin access reset for ${email}. Remove ADMIN_RESET now.`);
-  } else if (!admins.length) {
-    // Never create a live admin with the well-known development password.
-    if (process.env.NODE_ENV === 'production' && (!password || password.length < 8)) {
-      throw new Error('Set ADMIN_PASSWORD (8+ characters) to create the first admin account');
+    console.log(`[setup] Admin access reset for ${email}. Set ADMIN_RESET=false now.`);
+    return;
+  }
+  if (admins.length) return;
+  // Never create a live admin with the well-known development password.
+  if (isProd && (!password || password.length < 8)) {
+    return fail('No admin account exists yet. Set ADMIN_EMAIL and ADMIN_PASSWORD (8+ characters) and restart.');
+  }
+  await query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Agency Admin', $1, $2, 'admin')`, [
+    email,
+    await bcrypt.hash(password || 'admin12345', 10),
+  ]);
+  console.log(`[setup] Created admin account ${email}.`);
+}
+
+/** Idempotent: master statuses, starter services and the first admin. Pass --demo for sample data. */
+export async function seed({ demo = false, strict = true } = {}) {
+  await migrate();
+  const { rows: existing } = await query('SELECT COUNT(*)::int AS n FROM master_statuses');
+  if (!existing[0].n) {
+    for (const [i, s] of MASTER.entries()) {
+      await query('INSERT INTO master_statuses (name, color, is_done, position) VALUES ($1, $2, $3, $4)', [s.name, s.color, s.isDone, i]);
     }
-    await query(`INSERT INTO users (name, email, password_hash, role) VALUES ('Agency Admin', $1, $2, 'admin')`, [
-      email,
-      await bcrypt.hash(password || 'admin12345', 10),
-    ]);
   }
   await seedServices();
+  await ensureAdmin({ strict });
   if (demo) await seedDemo();
 }
 
