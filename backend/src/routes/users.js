@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
-import { requireRole } from '../middleware/auth.js';
+import { forgetAuthUser, requireRole } from '../middleware/auth.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
 import { serializeUser } from '../lib/serialize.js';
@@ -108,6 +108,7 @@ router.patch('/:id', async (req, res) => {
     ],
   );
   await setServiceTypes(rows[0].id, body.serviceTypeIds);
+  forgetAuthUser(rows[0].id); // deactivation or client changes apply to the very next request
   res.json({ user: serializeUser(await loadUser(rows[0].id)) });
 });
 

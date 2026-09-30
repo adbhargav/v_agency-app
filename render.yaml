@@ -9,7 +9,8 @@ services:
     # The free plan sleeps when idle, which pauses the deadline-alert and calendar-sync jobs.
     # Starter (or higher) keeps them running.
     plan: starter
-    region: oregon
+    # Same AWS region as the Neon database (us-east-2 / Ohio): every query stays in-region (~1ms instead of ~60ms).
+    region: ohio
     buildCommand: npm ci
     # Migrations run on every start. The seed is idempotent: it creates the master statuses,
     # the default services and the first admin only when they do not exist yet.

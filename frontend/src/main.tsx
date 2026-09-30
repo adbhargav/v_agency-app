@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { PERSIST_MAX_AGE, queryPersister } from './lib/queryPersist';
 import { ApiError } from './api/client';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -12,11 +14,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      gcTime: 10 * 60_000,
+      // Kept as long as the persisted cache so reopened tabs render from it instantly.
+      gcTime: PERSIST_MAX_AGE,
       refetchOnWindowFocus: true,
       retry: (count, error) => {
+        // The API client already waits out a waking server (0 / 502 / 504), and 4xx won't change on retry.
+        if (error instanceof ApiError && (error.status === 0 || error.status === 502 || error.status === 504)) return false;
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
-        return count < 2;
+        return count < 1;
       },
     },
   },
@@ -24,7 +29,7 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister, maxAge: PERSIST_MAX_AGE }}>
       <BrowserRouter>
         <ToastProvider>
           <AuthProvider>
@@ -32,6 +37,6 @@ createRoot(document.getElementById('root')!).render(
           </AuthProvider>
         </ToastProvider>
       </BrowserRouter>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   </StrictMode>,
 );

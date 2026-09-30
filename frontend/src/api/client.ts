@@ -64,23 +64,83 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+// ---- Server wake-up handling -------------------------------------------------------------------
+// A sleeping host (e.g. Render's free plan) answers the first request after a break with 502/503/504
+// or drops the connection while it boots, which can take ~50s. Safe requests are retried quietly
+// meanwhile, and listeners are told so the UI can show a "waking up" notice instead of an error.
+
+const SLOW_AFTER_MS = 3000;
+const WAKE_RETRY_DELAYS = [2000, 3000, 5000, 8000, 10000, 12000, 15000];
+let slowRequests = 0;
+const slowListeners = new Set<(slow: boolean) => void>();
+
+export function onServerSlow(fn: (slow: boolean) => void) {
+  slowListeners.add(fn);
+  return () => {
+    slowListeners.delete(fn);
+  };
+}
+
+function setSlow(delta: 1 | -1) {
+  const before = slowRequests > 0;
+  slowRequests = Math.max(0, slowRequests + delta);
+  const now = slowRequests > 0;
+  if (before !== now) slowListeners.forEach((fn) => fn(now));
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t);
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+  });
+
+/** 502/504 and bare 503s come from the host or proxy while the API is starting, not from the API itself. */
+async function isWakingResponse(res: Response) {
+  if (res.status === 502 || res.status === 504) return true;
+  if (res.status !== 503) return false;
+  const body = await res.clone().text();
+  return !body.includes('"error"');
+}
+
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  const method = opts.method ?? (opts.body !== undefined ? 'POST' : 'GET');
+  // Reads and logins are safe to repeat; other writes are never retried automatically.
+  const retryable = method === 'GET' || path === '/auth/login';
 
   let res: Response;
+  let markedSlow = false;
+  const slowTimer = setTimeout(() => {
+    markedSlow = true;
+    setSlow(1);
+  }, SLOW_AFTER_MS);
   try {
-    res = await fetch(`${API_URL}${path}${buildQuery(opts.query)}`, {
-      method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: opts.signal,
-    });
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError(0, 'Network error — check your connection.', 'NETWORK');
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetch(`${API_URL}${path}${buildQuery(opts.query)}`, {
+          method,
+          headers,
+          body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+          signal: opts.signal,
+        });
+        if (!retryable || attempt >= WAKE_RETRY_DELAYS.length || !(await isWakingResponse(res))) break;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e;
+        if (!retryable || attempt >= WAKE_RETRY_DELAYS.length) {
+          throw new ApiError(0, 'Cannot reach the server — check your connection and try again.', 'NETWORK');
+        }
+      }
+      await sleep(WAKE_RETRY_DELAYS[attempt], opts.signal);
+    }
+  } finally {
+    clearTimeout(slowTimer);
+    if (markedSlow) setSlow(-1);
   }
 
   const text = await res.text();

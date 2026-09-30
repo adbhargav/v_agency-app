@@ -12,6 +12,28 @@ export function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 }
 
+// Every API call needs the current user. Caching it briefly saves a database round trip per request;
+// changes made through the users API clear the entry, so deactivation and role changes still apply at once.
+const USER_TTL_MS = 30_000;
+const userCache = new Map();
+
+export function forgetAuthUser(userId) {
+  if (userId) userCache.delete(userId);
+  else userCache.clear();
+}
+
+async function loadAuthUser(id) {
+  const hit = userCache.get(id);
+  if (hit && hit.expires > Date.now()) return hit.user;
+  const { rows } = await query(
+    'SELECT id, name, email, role, employment_type, client_id, is_active FROM users WHERE id = $1',
+    [id],
+  );
+  if (userCache.size > 5000) userCache.clear();
+  userCache.set(id, { user: rows[0], expires: Date.now() + USER_TTL_MS });
+  return rows[0];
+}
+
 export async function authenticate(req, _res, next) {
   const header = req.headers.authorization || '';
   let token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -32,12 +54,7 @@ export async function authenticate(req, _res, next) {
   if (fileScope ? payload.purpose !== 'file' || payload.fid !== fileScope : payload.purpose) {
     throw unauthorized('Invalid token');
   }
-  // Re-read the user so deactivation and role changes take effect immediately.
-  const { rows } = await query(
-    'SELECT id, name, email, role, employment_type, client_id, is_active FROM users WHERE id = $1',
-    [payload.sub],
-  );
-  const user = rows[0];
+  const user = await loadAuthUser(payload.sub);
   if (!user || !user.is_active) throw unauthorized('Account is inactive');
   req.user = { id: user.id, name: user.name, email: user.email, role: user.role, employmentType: user.employment_type, clientId: user.client_id };
   next();

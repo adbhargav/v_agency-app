@@ -6,6 +6,7 @@ import { Spinner } from './components/ui';
 import { LogoMark } from './components/Logo';
 import { homeFor } from './lib/roles';
 import type { Role } from './types';
+import { ServerWakingBanner } from './components/ServerWakingBanner';
 
 // Role areas are code-split so each user only downloads what they can use.
 const AdminRoutes = lazy(() => import('./pages/admin/AdminRoutes'));
@@ -51,6 +52,7 @@ function Home() {
 export default function App() {
   return (
     <Suspense fallback={<FullScreenLoader />}>
+      <ServerWakingBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route

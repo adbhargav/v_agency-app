@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { http, tokenStore, UNAUTHORIZED_EVENT } from '../api/client';
+import { ApiError, http, tokenStore, UNAUTHORIZED_EVENT } from '../api/client';
+import { clearPersistedQueries } from '../lib/queryPersist';
 import type { User } from '../types';
 
 interface AuthState {
@@ -13,27 +14,59 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+// The last known user is kept so the app can render immediately on reload while /auth/me
+// re-validates in the background, instead of showing a spinner until the server answers.
+const USER_KEY = 'vagency.user';
+const userCache = {
+  get(): User | null {
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      return raw && tokenStore.get() ? (JSON.parse(raw) as User) : null;
+    } catch {
+      return null;
+    }
+  },
+  set(user: User | null) {
+    try {
+      if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+      else localStorage.removeItem(USER_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(() => !!tokenStore.get());
+  const [user, setUserState] = useState<User | null>(() => userCache.get());
+  // Only block rendering when there is a token but no cached user to show yet.
+  const [loading, setLoading] = useState(() => !!tokenStore.get() && !userCache.get());
+
+  const setUser = useCallback((u: User | null) => {
+    userCache.set(u);
+    setUserState(u);
+  }, []);
 
   const logout = useCallback(() => {
     tokenStore.clear();
     setUser(null);
     qc.clear();
-  }, [qc]);
+    clearPersistedQueries();
+  }, [qc, setUser]);
 
   const refresh = useCallback(async () => {
     if (!tokenStore.get()) return;
     const { user } = await http.get<{ user: User }>('/auth/me');
     setUser(user);
-  }, []);
+  }, [setUser]);
 
   useEffect(() => {
     if (!tokenStore.get()) return;
     refresh()
-      .catch(() => logout())
+      // Only a rejected session logs out; a slow or waking server must not.
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) logout();
+      })
       .finally(() => setLoading(false));
   }, [refresh, logout]);
 
@@ -48,10 +81,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await http.post<{ token: string; user: User }>('/auth/login', { email, password });
       tokenStore.set(res.token);
       qc.clear();
+      clearPersistedQueries();
       setUser(res.user);
       return res.user;
     },
-    [qc],
+    [qc, setUser],
   );
 
   const value = useMemo(() => ({ user, loading, login, logout, refresh }), [user, loading, login, logout, refresh]);

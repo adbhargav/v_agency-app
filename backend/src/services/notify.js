@@ -18,7 +18,8 @@ export async function notify(recipients, { type, title, body, taskId = null, pro
   if (!email || !users.length) return;
   const { rows } = await query('SELECT email FROM users WHERE id = ANY($1::uuid[])', [users.map((u) => u.user_id)]);
   const ctaUrl = taskId ? `${config.appUrl}/tasks/${taskId}` : config.appUrl;
-  await Promise.all(
+  // Delivery can take seconds over SMTP; don't make the user's request wait for it (sendMail never throws).
+  void Promise.all(
     rows.map((r) =>
       sendMail({ to: r.email, subject: title, heading: title, body, ctaUrl, ctaLabel, tone: priority === 'high' ? 'alert' : 'normal' }),
     ),
